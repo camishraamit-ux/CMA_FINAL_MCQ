@@ -7,62 +7,66 @@ import urllib.parse
 from fpdf import FPDF
 
 # ==============================================================================
-# 1. STREAMLIT CONFIGURATION & CUSTOM MOBILE-FIRST STYLING
+# 1. STREAMLIT CONFIGURATION & INTERACTIVE MOBILE STYLING
 # ==============================================================================
 st.set_page_config(page_title="CMA FINAL MCQ Assessment Portal", layout="centered")
 
-# CSS to maximize vertical fill and enlarge text/controls for mobile screens
 st.markdown("""
     <style>
-    /* Remove excessive top/bottom padding in Streamlit container */
+    /* Maximize Mobile Viewport */
     .block-container {
-        padding-top: 1rem !important;
+        padding-top: 0.8rem !important;
         padding-bottom: 1rem !important;
         max-width: 100% !important;
     }
     
-    /* Header Customization */
-    .app-title {
-        font-size: 28px !important;
-        font-weight: 800 !important;
-        color: #1e3a8a !important;
-        margin-bottom: 2px !important;
+    /* Top Badge Bar (Replaces Large Title) */
+    .top-info-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background-color: #f1f5f9;
+        padding: 8px 14px;
+        border-radius: 8px;
+        margin-bottom: 12px;
+        border: 1px solid #cbd5e1;
+    }
+    .subject-badge {
+        font-size: 14px;
+        font-weight: 700;
+        color: #1e3a8a;
+    }
+    .candidate-badge {
+        font-size: 13px;
+        font-weight: 600;
+        color: #475569;
     }
     
-    .candidate-sub {
-        font-size: 16px !important;
-        color: #475569 !important;
-        font-weight: 600 !important;
-        margin-bottom: 10px !important;
-    }
-    
-    /* Prominent Question Card */
+    /* Prominent Interactive Question Card */
     .question-card {
         background-color: #ffffff;
-        border: 2px solid #1e3a8a;
-        border-left: 8px solid #1e3a8a;
         border-radius: 14px;
-        padding: 24px 20px;
-        margin-top: 8px;
-        margin-bottom: 24px;
-        box-shadow: 0px 6px 16px rgba(30, 58, 138, 0.1);
+        padding: 22px 18px;
+        margin-top: 6px;
+        margin-bottom: 20px;
+        border: 2px solid #1e3a8a;
+        box-shadow: 0px 4px 12px rgba(30, 58, 138, 0.08);
     }
     
-    /* Large & Bold Question Text */
     .question-text {
         font-size: 26px !important;
         font-weight: 700 !important;
         color: #0f172a !important;
-        line-height: 1.45 !important;
+        line-height: 1.4 !important;
     }
     
-    /* Full-Width Touch Option Cards */
+    /* Interactive Extra-Large Option Buttons */
     div[aria-label="Select your answer:"] label {
         width: 100% !important;
-        font-size: 20px !important;
+        font-size: 22px !important;
         font-weight: 600 !important;
-        color: #1e293b !important;
-        padding: 16px 20px !important;
+        color: #0f172a !important;
+        padding: 18px 20px !important;
         margin-bottom: 14px !important;
         border-radius: 12px !important;
         background-color: #f8fafc !important;
@@ -71,28 +75,36 @@ st.markdown("""
         align-items: center !important;
         cursor: pointer !important;
         transition: all 0.2s ease-in-out !important;
-        box-shadow: 0px 2px 6px rgba(0,0,0,0.04) !important;
+        box-shadow: 0px 3px 8px rgba(0,0,0,0.05) !important;
     }
     
-    /* Hover and Selection Highlights */
+    /* Hover State */
     div[aria-label="Select your answer:"] label:hover {
         background-color: #eff6ff !important;
         border-color: #2563eb !important;
         color: #1e3a8a !important;
+        transform: translateY(-2px);
+    }
+
+    /* Selection Highlight Styling */
+    div[aria-label="Select your answer:"] label[data-baseweb="radio"]:has(input:checked) {
+        background-color: #1e3a8a !important;
+        color: #ffffff !important;
+        border-color: #1e3a8a !important;
     }
     
     /* Enlarge Radio Circles */
     div[aria-label="Select your answer:"] input[type="radio"] {
-        transform: scale(1.6) !important;
-        margin-right: 16px !important;
+        transform: scale(1.7) !important;
+        margin-right: 18px !important;
         accent-color: #2563eb !important;
     }
     
-    /* Larger Button Styling */
+    /* Navigation Button Customization */
     div.stButton > button {
-        font-size: 18px !important;
+        font-size: 19px !important;
         font-weight: 700 !important;
-        padding: 12px 16px !important;
+        padding: 14px 18px !important;
         border-radius: 10px !important;
     }
     </style>
@@ -250,10 +262,10 @@ if "current_q_index" not in st.session_state:
     st.session_state.current_q_index = 0
 
 # ==============================================================================
-# 5. REGISTRATION SCREEN
+# 5. REGISTRATION SCREEN (TITLES DISPLAYED HERE ONLY)
 # ==============================================================================
 if not st.session_state.test_started:
-    st.markdown('<div class="app-title">🎯 CMA FINAL MCQ Assessment Portal</div>', unsafe_allow_html=True)
+    st.markdown('<h1 style="color:#1e3a8a; font-size:28px;">🎯 CMA FINAL MCQ Assessment Portal</h1>', unsafe_allow_html=True)
     st.write("Configure your assessment settings below to get started.")
     
     with st.form("setup_form"):
@@ -297,12 +309,9 @@ if not st.session_state.test_started:
                     st.error(f"Could not load '{pdf_filename}'. Ensure file is uploaded. Error: {e}")
 
 # ==============================================================================
-# 6. QUESTION DISPLAY SCREEN (OPTIMIZED FOR FULL MOBILE VIEWPORT)
+# 6. QUESTION DISPLAY SCREEN (NO HEADING - MAXIMUM QUESTION & ANSWER SPACE)
 # ==============================================================================
 else:
-    st.markdown(f'<div class="app-title">CMA Final - {st.session_state.selected_subject}</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="candidate-sub">Candidate Name: {st.session_state.candidate_name}</div>', unsafe_allow_html=True)
-
     df_test = st.session_state.assessment_df
     total_q = len(df_test)
 
@@ -310,11 +319,22 @@ else:
         curr_idx = st.session_state.current_q_index
         row = df_test.iloc[curr_idx]
         
+        # Compact Top Info Bar (Replaces Large Heading)
+        st.markdown(
+            f'''
+            <div class="top-info-bar">
+                <span class="subject-badge">📚 {st.session_state.selected_subject}</span>
+                <span class="candidate-badge">👤 {st.session_state.candidate_name}</span>
+            </div>
+            ''',
+            unsafe_allow_html=True
+        )
+        
         # Progress Bar & Counter
         st.progress((curr_idx + 1) / total_q)
         st.caption(f"Question {curr_idx + 1} of {total_q}")
         
-        # Large Styled Question Card
+        # Styled Question Card
         st.markdown(
             f'''
             <div class="question-card">
@@ -327,7 +347,7 @@ else:
         valid_options = [opt for opt in row["options"] if opt]
         saved_choice = st.session_state.user_answers.get(curr_idx, None)
         
-        # Large Radio Options
+        # Large Interactive Options
         choice = st.radio(
             label="Select your answer:",
             options=range(len(valid_options)),
@@ -341,7 +361,7 @@ else:
 
         st.write("")
         
-        # Action Navigation Bar
+        # Bottom Navigation Controls
         if curr_idx == total_q - 1:
             col_prev, col_sub = st.columns([1, 1])
             with col_prev:
@@ -367,6 +387,10 @@ else:
     # 7. SCORECARD & REVIEW SCREEN
     # ==========================================================================
     else:
+        st.markdown(f'<h2 style="color:#1e3a8a;">CMA Final - {st.session_state.selected_subject}</h2>', unsafe_allow_html=True)
+        st.markdown(f"**Candidate Name:** {st.session_state.candidate_name}")
+        st.divider()
+
         score = 0
         total_questions = len(df_test)
         detailed_report = []
