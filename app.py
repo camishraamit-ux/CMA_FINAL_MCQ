@@ -7,7 +7,71 @@ import urllib.parse
 from fpdf import FPDF
 
 # ==============================================================================
-# 1. PDF EXTRACTION LOGIC (FILTER OUT UNANSWERED QUESTIONS)
+# 1. STREAMLIT CONFIGURATION & CUSTOM MOBILE STYLING
+# ==============================================================================
+st.set_page_config(page_title="CMA FINAL MCQ Assessment Portal", layout="centered")
+
+# Custom CSS for Large Font, Attractive Card Layout & Big Touch Controls
+st.markdown("""
+    <style>
+    /* Question Card Box */
+    .question-card {
+        background-color: #ffffff;
+        border: 2px solid #1e3a8a;
+        border-radius: 12px;
+        padding: 20px;
+        margin-top: 10px;
+        margin-bottom: 20px;
+        box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.08);
+    }
+    
+    /* Large & Bold Question Text */
+    .question-text {
+        font-size: 22px !important;
+        font-weight: 700 !important;
+        color: #0f172a !important;
+        line-height: 1.4 !important;
+        margin-bottom: 15px !important;
+    }
+    
+    /* Radio Option Label Styling */
+    div[aria-label="Select your answer:"] label {
+        font-size: 18px !important;
+        font-weight: 500 !important;
+        color: #1e293b !important;
+        padding: 8px 12px !important;
+        margin-bottom: 6px !important;
+        border-radius: 8px !important;
+        background-color: #f8fafc !important;
+        border: 1px solid #e2e8f0 !important;
+        display: flex !important;
+        align-items: center !important;
+        cursor: pointer !important;
+    }
+    
+    /* Radio Option Hover State */
+    div[aria-label="Select your answer:"] label:hover {
+        background-color: #eff6ff !important;
+        border-color: #3b82f6 !important;
+    }
+    
+    /* Enlarge Radio Circles */
+    div[aria-label="Select your answer:"] input[type="radio"] {
+        transform: scale(1.3) !important;
+        margin-right: 12px !important;
+    }
+    
+    /* Header Customization */
+    .app-title {
+        font-size: 26px !important;
+        font-weight: 800 !important;
+        color: #1e3a8a !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# ==============================================================================
+# 2. PDF EXTRACTION LOGIC
 # ==============================================================================
 @st.cache_data
 def extract_mcqs_from_pdf(pdf_path):
@@ -62,7 +126,7 @@ def extract_mcqs_from_pdf(pdf_path):
     return pd.DataFrame(mcq_list)
 
 # ==============================================================================
-# 2. PDF SCORECARD GENERATOR WITH COMPLETE QUESTION & ANSWER DETAILS
+# 3. PDF SCORECARD GENERATOR (FPDF2)
 # ==============================================================================
 class ScorecardPDF(FPDF):
     def header(self):
@@ -76,7 +140,6 @@ def generate_pdf_scorecard(candidate_name, subject_name, score, total_questions,
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
 
-    # Candidate Summary Block
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_fill_color(243, 244, 246)
     pdf.set_draw_color(209, 213, 219)
@@ -96,7 +159,6 @@ def generate_pdf_scorecard(candidate_name, subject_name, score, total_questions,
         
     pdf.ln(6)
 
-    # Detailed Review Header
     pdf.set_font("Helvetica", "B", 12)
     pdf.set_text_color(30, 58, 138)
     pdf.cell(0, 8, "Detailed Assessment Breakdown", ln=True)
@@ -104,29 +166,27 @@ def generate_pdf_scorecard(candidate_name, subject_name, score, total_questions,
     pdf.line(10, pdf.get_y(), 200, pdf.get_y())
     pdf.ln(4)
 
-    # Question Breakdown inside PDF
     for item in detailed_report:
         pdf.set_font("Helvetica", "B", 10)
         pdf.set_text_color(0, 0, 0)
-        
         pdf.multi_cell(0, 5, f"{item['q_num']}. {item['question']}")
         pdf.ln(1)
         
         pdf.set_font("Helvetica", "", 9)
         if item["status_type"] == "correct":
-            pdf.set_text_color(16, 185, 129)  # Green
+            pdf.set_text_color(16, 185, 129)
             pdf.cell(0, 5, f"   Marked Answer : {item['user_answer']} (Correct - 1 Mark)", ln=True)
-            pdf.set_text_color(30, 58, 138)  # Blue
+            pdf.set_text_color(30, 58, 138)
             pdf.cell(0, 5, f"   Correct Answer: {item['correct_answer']}", ln=True)
         elif item["status_type"] == "incorrect":
-            pdf.set_text_color(239, 68, 68)   # Red
+            pdf.set_text_color(239, 68, 68)
             pdf.cell(0, 5, f"   Marked Answer : {item['user_answer']} (Incorrect - 0 Marks)", ln=True)
-            pdf.set_text_color(30, 58, 138)  # Blue
+            pdf.set_text_color(30, 58, 138)
             pdf.cell(0, 5, f"   Correct Answer: {item['correct_answer']}", ln=True)
         else:
-            pdf.set_text_color(217, 119, 6)   # Amber
+            pdf.set_text_color(217, 119, 6)
             pdf.cell(0, 5, f"   Marked Answer : Unanswered (0 Marks)", ln=True)
-            pdf.set_text_color(30, 58, 138)  # Blue
+            pdf.set_text_color(30, 58, 138)
             pdf.cell(0, 5, f"   Correct Answer: {item['correct_answer']}", ln=True)
             
         pdf.ln(3)
@@ -134,10 +194,8 @@ def generate_pdf_scorecard(candidate_name, subject_name, score, total_questions,
     return bytes(pdf.output())
 
 # ==============================================================================
-# 3. STREAMLIT CONFIGURATION & SETUP
+# 4. APP STATE INITIALIZATION
 # ==============================================================================
-st.set_page_config(page_title="CMA FINAL MCQ Assessment Portal", layout="centered")
-
 SUBJECT_FILES = {
     "Corporate and Economic Laws": "13. CORPORATE AND ECONOMIC LAWS.pdf",
     "Strategic Financial Management": "14. STRATEGIC FINANCIAL MANAGEMENT.pdf",
@@ -164,10 +222,10 @@ if "current_q_index" not in st.session_state:
     st.session_state.current_q_index = 0
 
 # ==============================================================================
-# 4. REGISTRATION & CONFIGURATION SCREEN
+# 5. REGISTRATION SCREEN
 # ==============================================================================
 if not st.session_state.test_started:
-    st.title("🎯 CMA FINAL MCQ Assessment Portal")
+    st.markdown('<div class="app-title">🎯 CMA FINAL MCQ Assessment Portal</div>', unsafe_allow_html=True)
     st.write("Configure your assessment settings below to get started.")
     
     with st.form("setup_form"):
@@ -199,7 +257,7 @@ if not st.session_state.test_started:
                     else:
                         num_to_sample = min(q_count, total_available)
                         if num_to_sample < q_count:
-                            st.warning(f"Note: Only {total_available} questions with valid answers were available in this subject. All available questions will be loaded.")
+                            st.warning(f"Note: Only {total_available} questions available in this subject.")
                         
                         st.session_state.assessment_df = df_all.sample(n=num_to_sample).reset_index(drop=True)
                         st.session_state.user_answers = {}
@@ -208,172 +266,177 @@ if not st.session_state.test_started:
                         st.session_state.test_started = True
                         st.rerun()
                 except Exception as e:
-                    st.error(f"Could not load '{pdf_filename}'. Ensure this file is uploaded to GitHub. Error: {e}")
+                    st.error(f"Could not load '{pdf_filename}'. Ensure file is uploaded. Error: {e}")
 
 # ==============================================================================
-# 5. ASSESSMENT SCREEN (80% CONTAINER / ONE QUESTION AT A TIME)
+# 6. QUESTION DISPLAY SCREEN
 # ==============================================================================
 else:
-    st.title(f"CMA Final - {st.session_state.selected_subject}")
+    st.markdown(f'<div class="app-title">CMA Final - {st.session_state.selected_subject}</div>', unsafe_allow_html=True)
     st.markdown(f"**Candidate Name:** {st.session_state.candidate_name}")
     st.divider()
 
     df_test = st.session_state.assessment_df
     total_q = len(df_test)
 
-    # Create 80% screen width layout (10% left margin, 80% content, 10% right margin)
-    _, main_col, _ = st.columns([1, 8, 1])
+    if not st.session_state.submitted:
+        curr_idx = st.session_state.current_q_index
+        row = df_test.iloc[curr_idx]
+        
+        # Progress Bar & Counter
+        st.progress((curr_idx + 1) / total_q)
+        st.caption(f"Question {curr_idx + 1} of {total_q}")
+        
+        # Styled Question Card
+        st.markdown(
+            f'''
+            <div class="question-card">
+                <div class="question-text">Q{curr_idx + 1}. {row["question"]}</div>
+            </div>
+            ''',
+            unsafe_allow_html=True
+        )
+        
+        valid_options = [opt for opt in row["options"] if opt]
+        saved_choice = st.session_state.user_answers.get(curr_idx, None)
+        
+        choice = st.radio(
+            label="Select your answer:",
+            options=range(len(valid_options)),
+            format_func=lambda x: f"{chr(65+x)}. {valid_options[x]}",
+            key=f"q_radio_{curr_idx}",
+            index=saved_choice
+        )
+        
+        if choice is not None:
+            st.session_state.user_answers[curr_idx] = choice
 
-    with main_col:
-        if not st.session_state.submitted:
-            curr_idx = st.session_state.current_q_index
-            row = df_test.iloc[curr_idx]
-            
-            # Progress bar
-            st.progress((curr_idx + 1) / total_q)
-            st.caption(f"Question {curr_idx + 1} of {total_q}")
-            
-            st.markdown(f"### Q{curr_idx + 1}. {row['question']}")
-            
-            valid_options = [opt for opt in row["options"] if opt]
-            saved_choice = st.session_state.user_answers.get(curr_idx, None)
-            
-            choice = st.radio(
-                label="Select your answer:",
-                options=range(len(valid_options)),
-                format_func=lambda x: f"{chr(65+x)}. {valid_options[x]}",
-                key=f"q_radio_{curr_idx}",
-                index=saved_choice
-            )
-            
-            if choice is not None:
-                st.session_state.user_answers[curr_idx] = choice
-
-            st.divider()
-            
-            # Action controls
-            col_prev, col_next, col_sub = st.columns([1, 1, 1])
-            
-            with col_prev:
-                if curr_idx > 0:
-                    if st.button("⬅️ Previous"):
-                        st.session_state.current_q_index -= 1
-                        st.rerun()
-                        
-            with col_next:
-                if curr_idx < total_q - 1:
-                    if st.button("Next ➡️", type="primary"):
-                        st.session_state.current_q_index += 1
-                        st.rerun()
-                        
-            with col_sub:
-                if st.button("✅ Submit Assessment", type="primary" if curr_idx == total_q - 1 else "secondary"):
-                    st.session_state.submitted = True
+        st.divider()
+        
+        # Navigation Buttons
+        col_prev, col_next, col_sub = st.columns([1, 1, 1])
+        
+        with col_prev:
+            if curr_idx > 0:
+                if st.button("⬅️ Previous", use_container_width=True):
+                    st.session_state.current_q_index -= 1
                     st.rerun()
-
-        # ======================================================================
-        # 6. SCORECARD & PDF DOWNLOAD
-        # ======================================================================
-        else:
-            score = 0
-            total_questions = len(df_test)
-            detailed_report = []
-
-            for display_num, row in df_test.iterrows():
-                sn = display_num + 1
-                user_choice = st.session_state.user_answers.get(display_num)
-                correct_idx = row["correct_index"]
-                correct_ans_text = row["correct_answer_text"]
-                valid_options = [opt for opt in row["options"] if opt]
-                
-                is_correct = False
-                user_ans_str = ""
-                if user_choice is not None:
-                    selected_opt_text = valid_options[user_choice]
-                    user_ans_str = f"{chr(65+user_choice)}. {selected_opt_text}"
-                    is_correct = (user_choice == correct_idx) or (selected_opt_text.strip().lower() == correct_ans_text.strip().lower())
-                
-                status_type = "unanswered"
-                if is_correct:
-                    score += 1
-                    status_type = "correct"
-                elif user_choice is not None:
-                    status_type = "incorrect"
-
-                detailed_report.append({
-                    "q_num": f"Q{sn}",
-                    "question": row["question"],
-                    "user_answer": user_ans_str,
-                    "correct_answer": correct_ans_text,
-                    "status_type": status_type
-                })
-
-            percentage = round((score / total_questions) * 100, 2)
-
-            st.subheader("📊 Final Assessment Scorecard")
-            col1, col2 = st.columns(2)
-            col1.metric(label="Total Score", value=f"{score} / {total_questions}")
-            col2.metric(label="Percentage", value=f"{percentage}%")
-            st.divider()
-
-            st.subheader("📲 Export & Share Results")
-            
-            share_text = (
-                f"🎓 *CMA FINAL MCQ Assessment Results*\n"
-                f"👤 *Candidate:* {st.session_state.candidate_name}\n"
-                f"📚 *Subject:* {st.session_state.selected_subject}\n"
-                f"🏆 *Score:* {score}/{total_questions} ({percentage}%)\n"
-                f"✨ Completed via CMA FINAL MCQ App!"
-            )
-            whatsapp_url = f"https://api.whatsapp.com/send?text={urllib.parse.quote(share_text)}"
-            
-            st.markdown(
-                f'<a href="{whatsapp_url}" target="_blank" style="text-decoration:none;">'
-                f'<button style="background-color:#25D366;color:white;border:none;padding:10px 20px;'
-                f'border-radius:5px;font-size:16px;font-weight:bold;cursor:pointer;">'
-                f'📲 Share Score on WhatsApp</button></a>',
-                unsafe_allow_html=True
-            )
-            st.write("")
-
-            # PDF Download Button
-            pdf_data = generate_pdf_scorecard(
-                candidate_name=st.session_state.candidate_name,
-                subject_name=st.session_state.selected_subject,
-                score=score,
-                total_questions=total_questions,
-                percentage=percentage,
-                detailed_report=detailed_report
-            )
-
-            st.download_button(
-                label="📄 Download Official PDF Scorecard",
-                data=pdf_data,
-                file_name=f"{st.session_state.candidate_name}_CMA_Scorecard.pdf",
-                mime="application/pdf"
-            )
-
-            st.divider()
-            st.subheader("📝 Question Breakdown & Review")
-            
-            for item in detailed_report:
-                st.markdown(f"**{item['q_num']}: {item['question']}**")
-                
-                if item["status_type"] == "correct":
-                    st.success(f"Your Marked Answer: {item['user_answer']} (Correct - 1 Mark)")
-                    st.info(f"Correct Answer: {item['correct_answer']}")
-                elif item["status_type"] == "incorrect":
-                    st.error(f"Your Marked Answer: {item['user_answer']} (Incorrect - 0 Marks)")
-                    st.info(f"Correct Answer: {item['correct_answer']}")
-                else:
-                    st.warning(f"Your Marked Answer: Unanswered (0 Marks)")
-                    st.info(f"Correct Answer: {item['correct_answer']}")
-                
-                st.divider()
-                
-            if st.button("🔄 Take Another Test"):
-                st.session_state.test_started = False
-                st.session_state.submitted = False
-                st.session_state.user_answers = {}
-                st.session_state.current_q_index = 0
+                    
+        with col_next:
+            if curr_idx < total_q - 1:
+                if st.button("Next ➡️", type="primary", use_container_width=True):
+                    st.session_state.current_q_index += 1
+                    st.rerun()
+                    
+        with col_sub:
+            if st.button("✅ Submit Assessment", type="primary" if curr_idx == total_q - 1 else "secondary", use_container_width=True):
+                st.session_state.submitted = True
                 st.rerun()
+
+    # ==========================================================================
+    # 7. SCORECARD & REVIEW SCREEN
+    # ==========================================================================
+    else:
+        score = 0
+        total_questions = len(df_test)
+        detailed_report = []
+
+        for display_num, row in df_test.iterrows():
+            sn = display_num + 1
+            user_choice = st.session_state.user_answers.get(display_num)
+            correct_idx = row["correct_index"]
+            correct_ans_text = row["correct_answer_text"]
+            valid_options = [opt for opt in row["options"] if opt]
+            
+            is_correct = False
+            user_ans_str = ""
+            if user_choice is not None:
+                selected_opt_text = valid_options[user_choice]
+                user_ans_str = f"{chr(65+user_choice)}. {selected_opt_text}"
+                is_correct = (user_choice == correct_idx) or (selected_opt_text.strip().lower() == correct_ans_text.strip().lower())
+            
+            status_type = "unanswered"
+            if is_correct:
+                score += 1
+                status_type = "correct"
+            elif user_choice is not None:
+                status_type = "incorrect"
+
+            detailed_report.append({
+                "q_num": f"Q{sn}",
+                "question": row["question"],
+                "user_answer": user_ans_str,
+                "correct_answer": correct_ans_text,
+                "status_type": status_type
+            })
+
+        percentage = round((score / total_questions) * 100, 2)
+
+        st.subheader("📊 Final Assessment Scorecard")
+        col1, col2 = st.columns(2)
+        col1.metric(label="Total Score", value=f"{score} / {total_questions}")
+        col2.metric(label="Percentage", value=f"{percentage}%")
+        st.divider()
+
+        st.subheader("📲 Export & Share Results")
+        
+        share_text = (
+            f"🎓 *CMA FINAL MCQ Assessment Results*\n"
+            f"👤 *Candidate:* {st.session_state.candidate_name}\n"
+            f"📚 *Subject:* {st.session_state.selected_subject}\n"
+            f"🏆 *Score:* {score}/{total_questions} ({percentage}%)\n"
+            f"✨ Completed via CMA FINAL MCQ App!"
+        )
+        whatsapp_url = f"https://api.whatsapp.com/send?text={urllib.parse.quote(share_text)}"
+        
+        st.markdown(
+            f'<a href="{whatsapp_url}" target="_blank" style="text-decoration:none;">'
+            f'<button style="background-color:#25D366;color:white;border:none;padding:12px 24px;'
+            f'border-radius:6px;font-size:16px;font-weight:bold;cursor:pointer;width:100%;">'
+            f'📲 Share Score on WhatsApp</button></a>',
+            unsafe_allow_html=True
+        )
+        st.write("")
+
+        # PDF Download Button
+        pdf_data = generate_pdf_scorecard(
+            candidate_name=st.session_state.candidate_name,
+            subject_name=st.session_state.selected_subject,
+            score=score,
+            total_questions=total_questions,
+            percentage=percentage,
+            detailed_report=detailed_report
+        )
+
+        st.download_button(
+            label="📄 Download Official PDF Scorecard",
+            data=pdf_data,
+            file_name=f"{st.session_state.candidate_name}_CMA_Scorecard.pdf",
+            mime="application/pdf",
+            use_container_width=True
+        )
+
+        st.divider()
+        st.subheader("📝 Question Breakdown & Review")
+        
+        for item in detailed_report:
+            st.markdown(f"**{item['q_num']}: {item['question']}**")
+            
+            if item["status_type"] == "correct":
+                st.success(f"Your Marked Answer: {item['user_answer']} (Correct - 1 Mark)")
+                st.info(f"Correct Answer: {item['correct_answer']}")
+            elif item["status_type"] == "incorrect":
+                st.error(f"Your Marked Answer: {item['user_answer']} (Incorrect - 0 Marks)")
+                st.info(f"Correct Answer: {item['correct_answer']}")
+            else:
+                st.warning(f"Your Marked Answer: Unanswered (0 Marks)")
+                st.info(f"Correct Answer: {item['correct_answer']}")
+            
+            st.divider()
+            
+        if st.button("🔄 Take Another Test", use_container_width=True):
+            st.session_state.test_started = False
+            st.session_state.submitted = False
+            st.session_state.user_answers = {}
+            st.session_state.current_q_index = 0
+            st.rerun()
