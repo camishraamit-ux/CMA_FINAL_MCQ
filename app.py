@@ -7,105 +7,108 @@ import urllib.parse
 from fpdf import FPDF
 
 # ==============================================================================
-# 1. STREAMLIT CONFIGURATION & INTERACTIVE MOBILE STYLING
+# 1. STREAMLIT CONFIGURATION & CUSTOM MOBILE STYLING
 # ==============================================================================
 st.set_page_config(page_title="CMA FINAL MCQ Assessment Portal", layout="centered")
 
 st.markdown("""
     <style>
-    /* Maximize Mobile Viewport */
+    /* 1. Reset Container Spacing */
     .block-container {
-        padding-top: 0.8rem !important;
-        padding-bottom: 1rem !important;
+        padding-top: 0.5rem !important;
+        padding-bottom: 0.5rem !important;
         max-width: 100% !important;
     }
-    
-    /* Top Badge Bar (Replaces Large Title) */
+
+    /* 2. Top Info Bar */
     .top-info-bar {
         display: flex;
         justify-content: space-between;
         align-items: center;
         background-color: #f1f5f9;
-        padding: 8px 14px;
-        border-radius: 8px;
-        margin-bottom: 12px;
+        padding: 10px 16px;
+        border-radius: 10px;
+        margin-bottom: 10px;
         border: 1px solid #cbd5e1;
     }
     .subject-badge {
-        font-size: 14px;
+        font-size: 15px;
         font-weight: 700;
         color: #1e3a8a;
     }
     .candidate-badge {
-        font-size: 13px;
+        font-size: 14px;
         font-weight: 600;
         color: #475569;
     }
-    
-    /* Prominent Interactive Question Card */
+
+    /* 3. Expanded Question Card */
     .question-card {
         background-color: #ffffff;
         border-radius: 14px;
-        padding: 22px 18px;
-        margin-top: 6px;
-        margin-bottom: 20px;
+        padding: 24px 20px;
+        margin-top: 8px;
+        margin-bottom: 18px;
         border: 2px solid #1e3a8a;
         box-shadow: 0px 4px 12px rgba(30, 58, 138, 0.08);
     }
-    
     .question-text {
         font-size: 26px !important;
         font-weight: 700 !important;
         color: #0f172a !important;
         line-height: 1.4 !important;
     }
-    
-    /* Interactive Extra-Large Option Buttons */
-    div[aria-label="Select your answer:"] label {
+
+    /* 4. Force Full-Width Radio Options across Shadow DOM */
+    div[data-testid="stRadio"] {
         width: 100% !important;
+    }
+    div[data-testid="stRadio"] > div {
+        width: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 12px !important;
+    }
+    div[data-testid="stRadio"] label {
+        width: 100% !important;
+        min-height: 62px !important;
         font-size: 22px !important;
         font-weight: 600 !important;
         color: #0f172a !important;
-        padding: 18px 20px !important;
-        margin-bottom: 14px !important;
+        padding: 16px 20px !important;
         border-radius: 12px !important;
         background-color: #f8fafc !important;
         border: 2px solid #cbd5e1 !important;
         display: flex !important;
         align-items: center !important;
         cursor: pointer !important;
+        box-sizing: border-box !important;
         transition: all 0.2s ease-in-out !important;
-        box-shadow: 0px 3px 8px rgba(0,0,0,0.05) !important;
+        box-shadow: 0px 3px 8px rgba(0,0,0,0.04) !important;
     }
-    
-    /* Hover State */
-    div[aria-label="Select your answer:"] label:hover {
+
+    /* Option Hover & Active State */
+    div[data-testid="stRadio"] label:hover {
         background-color: #eff6ff !important;
         border-color: #2563eb !important;
         color: #1e3a8a !important;
-        transform: translateY(-2px);
     }
 
-    /* Selection Highlight Styling */
-    div[aria-label="Select your answer:"] label[data-baseweb="radio"]:has(input:checked) {
-        background-color: #1e3a8a !important;
-        color: #ffffff !important;
-        border-color: #1e3a8a !important;
-    }
-    
-    /* Enlarge Radio Circles */
-    div[aria-label="Select your answer:"] input[type="radio"] {
-        transform: scale(1.7) !important;
+    /* Enlarge Radio Bullet Input */
+    div[data-testid="stRadio"] input[type="radio"] {
+        transform: scale(1.8) !important;
         margin-right: 18px !important;
         accent-color: #2563eb !important;
     }
-    
-    /* Navigation Button Customization */
+
+    /* 5. 25% Larger Buttons + Full Width Stretch */
     div.stButton > button {
-        font-size: 19px !important;
-        font-weight: 700 !important;
-        padding: 14px 18px !important;
-        border-radius: 10px !important;
+        font-size: 24px !important;
+        font-weight: 800 !important;
+        padding: 18px 24px !important;
+        height: 64px !important;
+        border-radius: 12px !important;
+        box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1) !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -166,7 +169,7 @@ def extract_mcqs_from_pdf(pdf_path):
     return pd.DataFrame(mcq_list)
 
 # ==============================================================================
-# 3. PDF SCORECARD GENERATOR (FPDF2)
+# 3. PDF SCORECARD GENERATOR
 # ==============================================================================
 class ScorecardPDF(FPDF):
     def header(self):
@@ -262,7 +265,7 @@ if "current_q_index" not in st.session_state:
     st.session_state.current_q_index = 0
 
 # ==============================================================================
-# 5. REGISTRATION SCREEN (TITLES DISPLAYED HERE ONLY)
+# 5. REGISTRATION SCREEN
 # ==============================================================================
 if not st.session_state.test_started:
     st.markdown('<h1 style="color:#1e3a8a; font-size:28px;">🎯 CMA FINAL MCQ Assessment Portal</h1>', unsafe_allow_html=True)
@@ -309,7 +312,7 @@ if not st.session_state.test_started:
                     st.error(f"Could not load '{pdf_filename}'. Ensure file is uploaded. Error: {e}")
 
 # ==============================================================================
-# 6. QUESTION DISPLAY SCREEN (NO HEADING - MAXIMUM QUESTION & ANSWER SPACE)
+# 6. MCQ QUESTION DISPLAY SCREEN
 # ==============================================================================
 else:
     df_test = st.session_state.assessment_df
@@ -319,7 +322,7 @@ else:
         curr_idx = st.session_state.current_q_index
         row = df_test.iloc[curr_idx]
         
-        # Compact Top Info Bar (Replaces Large Heading)
+        # Compact Top Info Bar
         st.markdown(
             f'''
             <div class="top-info-bar">
@@ -330,11 +333,11 @@ else:
             unsafe_allow_html=True
         )
         
-        # Progress Bar & Counter
+        # Progress Bar
         st.progress((curr_idx + 1) / total_q)
         st.caption(f"Question {curr_idx + 1} of {total_q}")
         
-        # Styled Question Card
+        # Expanded Question Card
         st.markdown(
             f'''
             <div class="question-card">
@@ -347,7 +350,7 @@ else:
         valid_options = [opt for opt in row["options"] if opt]
         saved_choice = st.session_state.user_answers.get(curr_idx, None)
         
-        # Large Interactive Options
+        # Stretched Radio Options
         choice = st.radio(
             label="Select your answer:",
             options=range(len(valid_options)),
@@ -361,24 +364,22 @@ else:
 
         st.write("")
         
-        # Bottom Navigation Controls
-        if curr_idx == total_q - 1:
-            col_prev, col_sub = st.columns([1, 1])
-            with col_prev:
-                if curr_idx > 0 and st.button("⬅️ Previous", use_container_width=True):
+        # Side-by-Side 25% Larger Buttons
+        col_prev, col_next = st.columns([1, 1])
+        with col_prev:
+            if curr_idx > 0:
+                if st.button("⬅️ Previous", use_container_width=True):
                     st.session_state.current_q_index -= 1
                     st.rerun()
-            with col_sub:
-                if st.button("✅ Submit Assessment", type="primary", use_container_width=True):
+            else:
+                st.button("⬅️ Previous", disabled=True, use_container_width=True)
+                
+        with col_next:
+            if curr_idx == total_q - 1:
+                if st.button("✅ Submit", type="primary", use_container_width=True):
                     st.session_state.submitted = True
                     st.rerun()
-        else:
-            col_prev, col_next = st.columns([1, 1])
-            with col_prev:
-                if curr_idx > 0 and st.button("⬅️ Previous", use_container_width=True):
-                    st.session_state.current_q_index -= 1
-                    st.rerun()
-            with col_next:
+            else:
                 if st.button("Next ➡️", type="primary", use_container_width=True):
                     st.session_state.current_q_index += 1
                     st.rerun()
@@ -445,8 +446,8 @@ else:
         
         st.markdown(
             f'<a href="{whatsapp_url}" target="_blank" style="text-decoration:none;">'
-            f'<button style="background-color:#25D366;color:white;border:none;padding:14px 24px;'
-            f'border-radius:8px;font-size:18px;font-weight:bold;cursor:pointer;width:100%;">'
+            f'<button style="background-color:#25D366;color:white;border:none;padding:16px 24px;'
+            f'border-radius:10px;font-size:20px;font-weight:bold;cursor:pointer;width:100%;">'
             f'📲 Share Score on WhatsApp</button></a>',
             unsafe_allow_html=True
         )
