@@ -4,9 +4,10 @@ import pdfplumber
 import pandas as pd
 import streamlit as st
 import urllib.parse
+from fpdf import FPDF
 
 # ==============================================================================
-# 1. PDF EXTRACTION LOGIC
+# 1. PDF EXTRACTION LOGIC (FILTER OUT UNANSWERED QUESTIONS)
 # ==============================================================================
 @st.cache_data
 def extract_mcqs_from_pdf(pdf_path):
@@ -39,11 +40,15 @@ def extract_mcqs_from_pdf(pdf_path):
 
     mcq_list = []
     for q_num, q_data in questions_dict.items():
-        ans_text = answers_dict.get(q_num, "")
+        ans_text = answers_dict.get(q_num, "").strip()
         
+        # EXCLUDE: If the PDF has no answer for this question, skip it
+        if not ans_text:
+            continue
+            
         correct_index = None
         for idx, opt in enumerate(q_data["options"]):
-            if opt and (opt.strip().lower() == ans_text.strip().lower() or opt.strip().lower() in ans_text.strip().lower()):
+            if opt and (opt.strip().lower() == ans_text.lower() or opt.strip().lower() in ans_text.lower()):
                 correct_index = idx
                 break
         
@@ -58,25 +63,60 @@ def extract_mcqs_from_pdf(pdf_path):
     return pd.DataFrame(mcq_list)
 
 # ==============================================================================
-# 2. SCORECARD GENERATOR (TEXT FORMAT - NO EXTRA DEPENDENCIES)
+# 2. PDF SCORECARD GENERATOR (FPDF2)
 # ==============================================================================
-def generate_text_scorecard(candidate_name, subject_name, score, total_questions, percentage, detailed_report):
-    lines = []
-    lines.append("==================================================")
-    lines.append("       CMA FINAL MCQ ASSESSMENT REPORT CARD       ")
-    lines.append("==================================================")
-    lines.append(f"Candidate Name : {candidate_name}")
-    lines.append(f"Subject        : {subject_name}")
-    lines.append(f"Final Score    : {score} / {total_questions}")
-    lines.append(f"Percentage     : {percentage}%")
-    lines.append("==================================================\n")
-    lines.append("QUESTION BREAKDOWN:")
-    lines.append("--------------------------------------------------")
-    for item in detailed_report:
-        lines.append(f"{item['q_num']}: {item['status']}")
-    lines.append("--------------------------------------------------")
+class ScorecardPDF(FPDF):
+    def header(self):
+        self.set_font("Helvetica", "B", 16)
+        self.set_text_color(30, 58, 138)
+        self.cell(0, 10, "CMA FINAL MCQ ASSESSMENT REPORT CARD", ln=True, align="C")
+        self.ln(5)
+
+def generate_pdf_scorecard(candidate_name, subject_name, score, total_questions, percentage, detailed_report):
+    pdf = ScorecardPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+
+    # Candidate Summary Block
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.set_fill_color(243, 244, 246)
+    pdf.set_draw_color(209, 213, 219)
     
-    return "\n".join(lines)
+    meta_info = [
+        ("Candidate Name:", candidate_name),
+        ("Subject:", subject_name),
+        ("Final Score:", f"{score} / {total_questions}"),
+        ("Percentage:", f"{percentage}%")
+    ]
+    
+    for label, val in meta_info:
+        pdf.cell(50, 8, f"  {label}", border=1, fill=True)
+        pdf.set_font("Helvetica", "", 11)
+        pdf.cell(130, 8, f"  {val}", border=1, ln=True)
+        pdf.set_font("Helvetica", "B", 11)
+        
+    pdf.ln(10)
+
+    # Question Breakdown Table Header
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(0, 8, "Question Performance Breakdown", ln=True)
+    pdf.ln(2)
+
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_fill_color(30, 58, 138)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(30, 8, "  Q.No", border=1, fill=True)
+    pdf.cell(150, 8, "  Status", border=1, fill=True, ln=True)
+
+    # Rows
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(0, 0, 0)
+    for item in detailed_report:
+        pdf.cell(30, 7, f"  {item['q_num']}", border=1)
+        pdf.cell(150, 7, f"  {item['status']}", border=1, ln=True)
+
+    return bytes(pdf.output())
 
 # ==============================================================================
 # 3. STREAMLIT CONFIGURATION & SETUP
@@ -93,7 +133,6 @@ SUBJECT_FILES = {
     "Strategic Performance Management & Business Valuation": "20A. STRATEGIC PERFORMANCE MANAGEMENT & BUSINESS VALUATION.pdf"
 }
 
-# Session State Initializations
 if "test_started" not in st.session_state:
     st.session_state.test_started = False
 if "candidate_name" not in st.session_state:
@@ -139,11 +178,11 @@ if not st.session_state.test_started:
                     total_available = len(df_all)
                     
                     if total_available == 0:
-                        st.error("No valid questions found in the selected PDF.")
+                        st.error("No valid questions with available answers were found in this PDF.")
                     else:
                         num_to_sample = min(q_count, total_available)
                         if num_to_sample < q_count:
-                            st.warning(f"Note: Only {total_available} questions were available in this subject PDF. All available questions will be loaded.")
+                            st.warning(f"Note: Only {total_available} questions with valid answers were available in this subject. All available questions will be loaded.")
                         
                         st.session_state.assessment_df = df_all.sample(n=num_to_sample).reset_index(drop=True)
                         st.session_state.user_answers = {}
@@ -190,7 +229,7 @@ else:
                 st.rerun()
                 
     # ==========================================================================
-    # 6. SCORECARD & DOWNLOAD
+    # 6. SCORECARD & PDF DOWNLOAD
     # ==========================================================================
     else:
         score = 0
@@ -246,8 +285,8 @@ else:
         )
         st.write("")
 
-        # Scorecard Download Button
-        scorecard_txt = generate_text_scorecard(
+        # PDF Scorecard Download Button
+        pdf_data = generate_pdf_scorecard(
             candidate_name=st.session_state.candidate_name,
             subject_name=st.session_state.selected_subject,
             score=score,
@@ -257,10 +296,10 @@ else:
         )
 
         st.download_button(
-            label="📄 Download Scorecard Report (.txt)",
-            data=scorecard_txt,
-            file_name=f"{st.session_state.candidate_name}_CMA_Scorecard.txt",
-            mime="text/plain"
+            label="📄 Download Official PDF Scorecard",
+            data=pdf_data,
+            file_name=f"{st.session_state.candidate_name}_CMA_Scorecard.pdf",
+            mime="application/pdf"
         )
 
         st.divider()
