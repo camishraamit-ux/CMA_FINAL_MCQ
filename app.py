@@ -5,11 +5,6 @@ import pandas as pd
 import streamlit as st
 import urllib.parse
 
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib import colors
-
 # ==============================================================================
 # 1. PDF EXTRACTION LOGIC
 # ==============================================================================
@@ -63,60 +58,25 @@ def extract_mcqs_from_pdf(pdf_path):
     return pd.DataFrame(mcq_list)
 
 # ==============================================================================
-# 2. PDF REPORT GENERATOR (ReportLab)
+# 2. SCORECARD GENERATOR (TEXT FORMAT - NO EXTRA DEPENDENCIES)
 # ==============================================================================
-def generate_pdf_scorecard(candidate_name, subject_name, score, total_questions, percentage, detailed_report):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
-    styles = getSampleStyleSheet()
-    
-    title_style = ParagraphStyle(name='TitleStyle', parent=styles['Heading1'], fontSize=18, leading=22, alignment=1, textColor=colors.HexColor('#1E3A8A'))
-    normal_style = styles['Normal']
-    bold_style = ParagraphStyle(name='BoldStyle', parent=styles['Normal'], fontName='Helvetica-Bold')
-
-    elements = []
-
-    # Title Banner
-    elements.append(Paragraph("CMA FINAL MCQ ASSESSMENT REPORT CARD", title_style))
-    elements.append(Spacer(1, 15))
-
-    # Details Table
-    meta_data = [
-        [Paragraph("Candidate Name:", bold_style), Paragraph(candidate_name, normal_style)],
-        [Paragraph("Subject:", bold_style), Paragraph(subject_name, normal_style)],
-        [Paragraph("Final Score:", bold_style), Paragraph(f"{score} / {total_questions}", normal_style)],
-        [Paragraph("Percentage:", bold_style), Paragraph(f"{percentage}%", normal_style)]
-    ]
-    t = Table(meta_data, colWidths=[130, 380])
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F3F4F6')),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#D1D5DB')),
-        ('PADDING', (0,0), (-1,-1), 8),
-    ]))
-    elements.append(t)
-    elements.append(Spacer(1, 20))
-
-    # Breakdown Table
-    elements.append(Paragraph("<b>Question Performance Breakdown</b>", styles['Heading2']))
-    elements.append(Spacer(1, 10))
-
-    table_data = [["Q.No", "Status"]]
+def generate_text_scorecard(candidate_name, subject_name, score, total_questions, percentage, detailed_report):
+    lines = []
+    lines.append("==================================================")
+    lines.append("       CMA FINAL MCQ ASSESSMENT REPORT CARD       ")
+    lines.append("==================================================")
+    lines.append(f"Candidate Name : {candidate_name}")
+    lines.append(f"Subject        : {subject_name}")
+    lines.append(f"Final Score    : {score} / {total_questions}")
+    lines.append(f"Percentage     : {percentage}%")
+    lines.append("==================================================\n")
+    lines.append("QUESTION BREAKDOWN:")
+    lines.append("--------------------------------------------------")
     for item in detailed_report:
-        table_data.append([item["q_num"], item["status"]])
-
-    report_table = Table(table_data, colWidths=[80, 430])
-    report_table.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1E3A8A')),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#E5E7EB')),
-        ('PADDING', (0,0), (-1,-1), 6),
-    ]))
-    elements.append(report_table)
-
-    doc.build(elements)
-    buffer.seek(0)
-    return buffer
+        lines.append(f"{item['q_num']}: {item['status']}")
+    lines.append("--------------------------------------------------")
+    
+    return "\n".join(lines)
 
 # ==============================================================================
 # 3. STREAMLIT CONFIGURATION & SETUP
@@ -230,7 +190,7 @@ else:
                 st.rerun()
                 
     # ==========================================================================
-    # 6. SCORECARD & PDF DOWNLOAD
+    # 6. SCORECARD & DOWNLOAD
     # ==========================================================================
     else:
         score = 0
@@ -286,8 +246,8 @@ else:
         )
         st.write("")
 
-        # PDF Scorecard Download Button
-        pdf_data = generate_pdf_scorecard(
+        # Scorecard Download Button
+        scorecard_txt = generate_text_scorecard(
             candidate_name=st.session_state.candidate_name,
             subject_name=st.session_state.selected_subject,
             score=score,
@@ -297,10 +257,10 @@ else:
         )
 
         st.download_button(
-            label="📄 Download Official PDF Scorecard",
-            data=pdf_data,
-            file_name=f"{st.session_state.candidate_name}_CMA_Scorecard.pdf",
-            mime="application/pdf"
+            label="📄 Download Scorecard Report (.txt)",
+            data=scorecard_txt,
+            file_name=f"{st.session_state.candidate_name}_CMA_Scorecard.txt",
+            mime="text/plain"
         )
 
         st.divider()
