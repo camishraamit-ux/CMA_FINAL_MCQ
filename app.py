@@ -4,13 +4,10 @@ import pandas as pd
 import streamlit as st
 
 # ==============================================================================
-# 1. PDF EXTRACTION LOGIC
+# 1. PDF EXTRACTION LOGIC (Supports multiple subject files)
 # ==============================================================================
 @st.cache_data
 def extract_mcqs_from_pdf(pdf_path):
-    """
-    Extracts questions, multiple-choice options, and correct answers from tables inside the PDF.
-    """
     questions_dict = {}
     answers_dict = {}
 
@@ -22,7 +19,6 @@ def extract_mcqs_from_pdf(pdf_path):
                     continue
                 
                 for row in table:
-                    # Clean up inner line breaks and whitespace in table cells
                     clean_row = [cell.replace('\n', ' ').strip() if cell else "" for cell in row]
                     
                     if len(clean_row) < 3 or not clean_row[0].isdigit():
@@ -30,23 +26,19 @@ def extract_mcqs_from_pdf(pdf_path):
                         
                     q_num = int(clean_row[0])
                     
-                    # Structure 1: Question Bank Table [SL NO, QUESTION, OPTION 1, OPTION 2, OPTION 3, OPTION 4]
                     if len(clean_row) >= 6:
                         questions_dict[q_num] = {
                             "id": q_num,
                             "question": clean_row[1],
                             "options": [clean_row[2], clean_row[3], clean_row[4], clean_row[5]]
                         }
-                    # Structure 2: Answer Key Table [SL NO, QUESTION, CORRECT ANSWER]
                     elif len(clean_row) == 3:
                         answers_dict[q_num] = clean_row[2]
 
-    # Combine extracted questions with their matching answers
     mcq_list = []
     for q_num, q_data in questions_dict.items():
         ans_text = answers_dict.get(q_num, "")
         
-        # Match answer text against options to find correct option index (0-3)
         correct_index = None
         for idx, opt in enumerate(q_data["options"]):
             if opt and (opt.strip().lower() == ans_text.strip().lower() or opt.strip().lower() in ans_text.strip().lower()):
@@ -64,108 +56,150 @@ def extract_mcqs_from_pdf(pdf_path):
     return pd.DataFrame(mcq_list)
 
 # ==============================================================================
-# 2. STREAMLIT INTERACTIVE DASHBOARD
+# 2. STREAMLIT CONFIGURATION & SETUP
 # ==============================================================================
-st.set_page_config(page_title="Interactive MCQ Quiz", layout="centered")
+st.set_page_config(page_title="CMA Final Assessment", layout="centered")
 
-st.title("📚 Interactive MCQ Question Bank")
+# Map your 8 subject names to their respective PDF filenames
+# (Ensure your 8 PDF files are uploaded to your GitHub repository)
+SUBJECT_FILES = {
+    "Financial Analysis": "Financial_Analysis.pdf",
+    "Strategic Financial Management": "Strategic_Financial_Management.pdf",
+    "Strategic Cost Management": "Strategic_Cost_Management.pdf",
+    "Direct and Indirect Tax Laws": "Direct_and_Indirect_Tax_Laws.pdf",
+    "Corporate Laws and Compliance": "Corporate_Laws_and_Compliance.pdf",
+    "Business Strategy and Strategic Management": "Business_Strategy.pdf",
+    "Corporate Financial Reporting": "Corporate_Financial_Reporting.pdf",
+    "Business Valuation and Management": "Business_Valuation.pdf"
+}
 
-# Sidebar Setup
-st.sidebar.header("Configuration")
-uploaded_file = st.sidebar.file_uploader("Upload MCQ PDF", type=["pdf"])
+# Session State Initializations
+if "test_started" not in st.session_state:
+    st.session_state.test_started = False
+if "candidate_name" not in st.session_state:
+    st.session_state.candidate_name = ""
+if "selected_subject" not in st.session_state:
+    st.session_state.selected_subject = list(SUBJECT_FILES.keys())[0]
+if "assessment_df" not in st.session_state:
+    st.session_state.assessment_df = None
+if "user_answers" not in st.session_state:
+    st.session_state.user_answers = {}
+if "submitted" not in st.session_state:
+    st.session_state.submitted = False
 
-pdf_source = uploaded_file if uploaded_file else "MCQ_Bank_Paper_20A.pdf"
-
-try:
-    df_questions = extract_mcqs_from_pdf(pdf_source)
-    st.sidebar.success(f"Successfully loaded {len(df_questions)} questions!")
-except Exception as e:
-    st.error(f"Error reading PDF file: {e}")
-    st.stop()
-
-# Initialize Quiz Session States
-if "current_idx" not in st.session_state:
-    st.session_state.current_idx = random.randint(0, len(df_questions) - 1)
-if "selected_option" not in st.session_state:
-    st.session_state.selected_option = None
-if "score" not in st.session_state:
-    st.session_state.score = 0
-if "total_answered" not in st.session_state:
-    st.session_state.total_answered = 0
-
-# Interactive Scoreboard
-col1, col2 = st.columns(2)
-with col1:
-    st.metric(label="Score", value=f"{st.session_state.score} / {st.session_state.total_answered}")
-with col2:
-    if st.button("🔄 Reset Quiz"):
-        st.session_state.score = 0
-        st.session_state.total_answered = 0
-        st.session_state.selected_option = None
-        st.rerun()
-
-st.divider()
-
-# Load Current Question Information
-q_data = df_questions.iloc[st.session_state.current_idx]
-options = q_data["options"]
-correct_ans_text = q_data["correct_answer_text"]
-correct_idx = q_data["correct_index"]
-
-st.subheader(f"Question {q_data['id']}")
-st.write(f"**{q_data['question']}**")
-
-# Handle Click Events
-def handle_option_click(opt_index):
-    if st.session_state.selected_option is None:
-        st.session_state.selected_option = opt_index
-        st.session_state.total_answered += 1
-        
-        is_correct = (opt_index == correct_idx) or (options[opt_index].strip().lower() == correct_ans_text.strip().lower())
-        if is_correct:
-            st.session_state.score += 1
-
-# Render Clickable Option Buttons with Custom Visual Feedback
-for idx, opt in enumerate(options):
-    if not opt:
-        continue
-        
-    btn_label = f"{chr(65+idx)}. {opt}"
+# ==============================================================================
+# 3. REGISTRATION / SETUP SCREEN
+# ==============================================================================
+if not st.session_state.test_started:
+    st.title("🎯 CMA Final Assessment Portal")
+    st.write("Please enter your details and choose a subject to begin your 25-question randomized assessment.")
     
-    if st.session_state.selected_option is not None:
-        is_this_correct = (idx == correct_idx) or (opt.strip().lower() == correct_ans_text.strip().lower())
+    with st.form("setup_form"):
+        name_input = st.text_input("Enter Your Full Name:", value=st.session_state.candidate_name)
+        subject_choice = st.selectbox("Select Subject:", options=list(SUBJECT_FILES.keys()))
         
-        if is_this_correct:
-            # Display correct answer in Green box
-            st.markdown(
-                f'<div style="background-color: #d4edda; color: #155724; padding: 12px; border-radius: 5px; margin-bottom: 8px; border: 1px solid #c3e6cb;"><b>✓ {btn_label}</b></div>', 
-                unsafe_allow_html=True
-            )
-        elif st.session_state.selected_option == idx:
-            # Display wrong answer in Red box
-            st.markdown(
-                f'<div style="background-color: #f8d7da; color: #721c24; padding: 12px; border-radius: 5px; margin-bottom: 8px; border: 1px solid #f5c6cb;"><b>✗ {btn_label}</b></div>', 
-                unsafe_allow_html=True
-            )
-        else:
-            st.button(btn_label, key=f"opt_{idx}", disabled=True)
+        start_btn = st.form_submit_button("Start Assessment", type="primary")
+        
+        if start_btn:
+            if not name_input.strip():
+                st.error("Please enter your name to proceed.")
+            else:
+                st.session_state.candidate_name = name_input.strip()
+                st.session_state.selected_subject = subject_choice
+                
+                # Load PDF and sample 25 questions randomly
+                pdf_filename = SUBJECT_FILES[subject_choice]
+                try:
+                    df_all = extract_mcqs_from_pdf(pdf_filename)
+                    if len(df_all) < 25:
+                        st.warning(f"Note: This file only contains {len(df_all)} questions. All will be used.")
+                        st.session_state.assessment_df = df_all.sample(frac=1).reset_index(drop=True)
+                    else:
+                        st.session_state.assessment_df = df_all.sample(n=25).reset_index(drop=True)
+                    
+                    st.session_state.user_answers = {}
+                    st.session_state.submitted = False
+                    st.session_state.test_started = True
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Could not load '{pdf_filename}'. Make sure the file is uploaded to your repository. Error: {e}")
+
+# ==============================================================================
+# 4. ASSESSMENT SCREEN (25 Random Questions, Sn 1 to 25)
+# ==============================================================================
+else:
+    # Dynamic Heading Requirement
+    st.title(f"CMA Final - {st.session_state.selected_subject}")
+    st.markdown(f"**Candidate Name:** {st.session_state.candidate_name}")
+    st.divider()
+
+    df_test = st.session_state.assessment_df
+
+    if not st.session_state.submitted:
+        with st.form("quiz_form"):
+            for display_num, row in df_test.iterrows():
+                sn = display_num + 1  # Serial number from 1 to 25
+                st.markdown(f"### Q{sn}. {row['question']}")
+                
+                valid_options = [opt for opt in row["options"] if opt]
+                
+                # Render options using radio buttons
+                choice = st.radio(
+                    label=f"Select answer for Q{sn}",
+                    options=range(len(valid_options)),
+                    format_func=lambda x: f"{chr(65+x)}. {valid_options[x]}",
+                    key=f"q_{display_num}",
+                    index=None
+                )
+                
+                if choice is not None:
+                    st.session_state.user_answers[display_num] = choice
+                
+                st.write("")
+            
+            submit_assessment = st.form_submit_button("Submit Assessment", type="primary")
+            if submit_assessment:
+                st.session_state.submitted = True
+                st.rerun()
+                
+    # ==========================================================================
+    # 5. SCORECARD & RESULTS
+    # ==========================================================================
     else:
-        st.button(btn_label, key=f"opt_{idx}", on_click=handle_option_click, args=(idx,), use_container_width=True)
-
-# Post-Selection Feedback Messages
-if st.session_state.selected_option is not None:
-    selected_idx = st.session_state.selected_option
-    is_correct = (selected_idx == correct_idx) or (options[selected_idx].strip().lower() == correct_ans_text.strip().lower())
-    
-    if is_correct:
-        st.success("Correct Answer! 🎉")
-    else:
-        st.error(f"Incorrect. The correct answer is: **{correct_ans_text}**")
-
-# Next Question Navigation
-st.divider()
-def next_question():
-    st.session_state.selected_option = None
-    st.session_state.current_idx = random.randint(0, len(df_questions) - 1)
-
-st.button("➡️ Next Question", on_click=next_question, type="primary")
+        score = 0
+        total_questions = len(df_test)
+        
+        st.subheader("📊 Assessment Results Summary")
+        
+        for display_num, row in df_test.iterrows():
+            sn = display_num + 1
+            user_choice = st.session_state.user_answers.get(display_num)
+            correct_idx = row["correct_index"]
+            correct_ans_text = row["correct_answer_text"]
+            valid_options = [opt for opt in row["options"] if opt]
+            
+            st.markdown(f"**Q{sn}: {row['question']}**")
+            
+            is_correct = False
+            if user_choice is not None:
+                selected_opt_text = valid_options[user_choice]
+                is_correct = (user_choice == correct_idx) or (selected_opt_text.strip().lower() == correct_ans_text.strip().lower())
+            
+            if is_correct:
+                score += 1
+                st.success(f"Your answer: {chr(65+user_choice)}. {valid_options[user_choice]} (Correct - 1 Mark)")
+            elif user_choice is not None:
+                st.error(f"Your answer: {chr(65+user_choice)}. {valid_options[user_choice]} (Incorrect - 0 Marks)")
+                st.info(f"Correct Answer: {correct_ans_text}")
+            else:
+                st.warning(f"Unanswered (0 Marks). Correct Answer: {correct_ans_text}")
+            
+            st.divider()
+            
+        st.metric(label="Final Score (Marks)", value=f"{score} / {total_questions}")
+        
+        if st.button("🔄 Take Another Test / Retake"):
+            st.session_state.test_started = False
+            st.session_state.submitted = False
+            st.session_state.user_answers = {}
+            st.rerun()
