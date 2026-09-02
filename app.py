@@ -242,6 +242,34 @@ def extract_mcqs_from_pdf(pdf_path):
 # ==============================================================================
 # 3. PDF SCORECARD GENERATOR
 # ==============================================================================
+
+# fpdf2's built-in fonts (Helvetica/Times/Courier) only support Latin-1.
+# PDFs sourced from question banks often contain smart quotes, en/em dashes,
+# the rupee sign, bullets, or regional-language characters that fall outside
+# that range and raise FPDFUnicodeEncodingException. Normalize before writing.
+_PDF_SAFE_REPLACEMENTS = {
+    "\u2018": "'", "\u2019": "'",      # curly single quotes
+    "\u201c": '"', "\u201d": '"',      # curly double quotes
+    "\u2013": "-", "\u2014": "-",      # en dash, em dash
+    "\u2026": "...",                    # ellipsis
+    "\u20b9": "Rs.",                    # rupee sign
+    "\u00a0": " ",                      # non-breaking space
+    "\u2022": "-", "\u25cf": "-",       # bullets
+    "\u2212": "-",                      # minus sign
+    "\u00d7": "x",                      # multiplication sign
+    "\u00f7": "/",                      # division sign
+}
+
+def pdf_safe(text):
+    """Make text safe for fpdf2's Latin-1-only core fonts."""
+    if text is None:
+        return ""
+    text = str(text)
+    for uni_char, ascii_eq in _PDF_SAFE_REPLACEMENTS.items():
+        text = text.replace(uni_char, ascii_eq)
+    # Any remaining character outside Latin-1 gets dropped rather than crashing the app.
+    return text.encode("latin-1", "replace").decode("latin-1")
+
 class ScorecardPDF(FPDF):
     def header(self):
         self.set_font("Helvetica", "B", 14)
@@ -259,8 +287,8 @@ def generate_pdf_scorecard(candidate_name, subject_name, score, total_questions,
     pdf.set_draw_color(209, 213, 219)
 
     meta_info = [
-        ("Candidate Name:", candidate_name),
-        ("Subject:", subject_name),
+        ("Candidate Name:", pdf_safe(candidate_name)),
+        ("Subject:", pdf_safe(subject_name)),
         ("Final Score:", f"{score} / {total_questions}"),
         ("Percentage:", f"{percentage}%")
     ]
@@ -283,20 +311,20 @@ def generate_pdf_scorecard(candidate_name, subject_name, score, total_questions,
     for item in detailed_report:
         pdf.set_font("Helvetica", "B", 10)
         pdf.set_text_color(0, 0, 0)
-        pdf.multi_cell(0, 5, f"{item['q_num']}. {item['question']}")
+        pdf.multi_cell(0, 5, pdf_safe(f"{item['q_num']}. {item['question']}"))
         pdf.ln(1)
 
         pdf.set_font("Helvetica", "", 9)
         if item["status_type"] == "correct":
             pdf.set_text_color(16, 185, 129)
-            pdf.cell(0, 5, f"   Marked Answer : {item['user_answer']} (Correct - 1 Mark)", ln=True)
+            pdf.cell(0, 5, pdf_safe(f"   Marked Answer : {item['user_answer']} (Correct - 1 Mark)"), ln=True)
             pdf.set_text_color(30, 58, 138)
-            pdf.cell(0, 5, f"   Correct Answer: {item['correct_answer']}", ln=True)
+            pdf.cell(0, 5, pdf_safe(f"   Correct Answer: {item['correct_answer']}"), ln=True)
         elif item["status_type"] == "incorrect":
             pdf.set_text_color(239, 68, 68)
-            pdf.cell(0, 5, f"   Marked Answer : {item['user_answer']} (Incorrect - 0 Marks)", ln=True)
+            pdf.cell(0, 5, pdf_safe(f"   Marked Answer : {item['user_answer']} (Incorrect - 0 Marks)"), ln=True)
             pdf.set_text_color(30, 58, 138)
-            pdf.cell(0, 5, f"   Correct Answer: {item['correct_answer']}", ln=True)
+            pdf.cell(0, 5, pdf_safe(f"   Correct Answer: {item['correct_answer']}"), ln=True)
         else:
             pdf.set_text_color(217, 119, 6)
             pdf.cell(0, 5, f"   Marked Answer : Unanswered (0 Marks)", ln=True)
