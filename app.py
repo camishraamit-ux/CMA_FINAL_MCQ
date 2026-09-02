@@ -42,7 +42,6 @@ def extract_mcqs_from_pdf(pdf_path):
     for q_num, q_data in questions_dict.items():
         ans_text = answers_dict.get(q_num, "").strip()
         
-        # EXCLUDE: If the source PDF has no answer for this question, skip it
         if not ans_text:
             continue
             
@@ -63,7 +62,7 @@ def extract_mcqs_from_pdf(pdf_path):
     return pd.DataFrame(mcq_list)
 
 # ==============================================================================
-# 2. PDF SCORECARD GENERATOR WITH COMPLETE QUESTION & ANSWER DETAILS (FPDF2)
+# 2. PDF SCORECARD GENERATOR WITH COMPLETE QUESTION & ANSWER DETAILS
 # ==============================================================================
 class ScorecardPDF(FPDF):
     def header(self):
@@ -110,11 +109,9 @@ def generate_pdf_scorecard(candidate_name, subject_name, score, total_questions,
         pdf.set_font("Helvetica", "B", 10)
         pdf.set_text_color(0, 0, 0)
         
-        # Question Statement
         pdf.multi_cell(0, 5, f"{item['q_num']}. {item['question']}")
         pdf.ln(1)
         
-        # Marked & Correct Answer Details
         pdf.set_font("Helvetica", "", 9)
         if item["status_type"] == "correct":
             pdf.set_text_color(16, 185, 129)  # Green
@@ -214,7 +211,7 @@ if not st.session_state.test_started:
                     st.error(f"Could not load '{pdf_filename}'. Ensure this file is uploaded to GitHub. Error: {e}")
 
 # ==============================================================================
-# 5. ASSESSMENT SCREEN (ONE QUESTION AT A TIME)
+# 5. ASSESSMENT SCREEN (80% CONTAINER / ONE QUESTION AT A TIME)
 # ==============================================================================
 else:
     st.title(f"CMA Final - {st.session_state.selected_subject}")
@@ -224,158 +221,159 @@ else:
     df_test = st.session_state.assessment_df
     total_q = len(df_test)
 
-    if not st.session_state.submitted:
-        curr_idx = st.session_state.current_q_index
-        row = df_test.iloc[curr_idx]
-        
-        # Progress indicator
-        st.progress((curr_idx + 1) / total_q)
-        st.caption(f"Question {curr_idx + 1} of {total_q}")
-        
-        st.markdown(f"### Q{curr_idx + 1}. {row['question']}")
-        
-        valid_options = [opt for opt in row["options"] if opt]
-        
-        # Pre-select previously chosen answer if exists
-        saved_choice = st.session_state.user_answers.get(curr_idx, None)
-        
-        choice = st.radio(
-            label="Select your answer:",
-            options=range(len(valid_options)),
-            format_func=lambda x: f"{chr(65+x)}. {valid_options[x]}",
-            key=f"q_radio_{curr_idx}",
-            index=saved_choice
-        )
-        
-        if choice is not None:
-            st.session_state.user_answers[curr_idx] = choice
+    # Create 80% screen width layout (10% left margin, 80% content, 10% right margin)
+    _, main_col, _ = st.columns([1, 8, 1])
 
-        st.divider()
-        
-        # Navigation Buttons
-        col_prev, col_next, col_sub = st.columns([1, 1, 1])
-        
-        with col_prev:
-            if curr_idx > 0:
-                if st.button("⬅️ Previous"):
-                    st.session_state.current_q_index -= 1
-                    st.rerun()
-                    
-        with col_next:
-            if curr_idx < total_q - 1:
-                if st.button("Next ➡️", type="primary"):
-                    st.session_state.current_q_index += 1
-                    st.rerun()
-                    
-        with col_sub:
-            if st.button("✅ Submit Assessment", type="primary" if curr_idx == total_q - 1 else "secondary"):
-                st.session_state.submitted = True
-                st.rerun()
-
-    # ==========================================================================
-    # 6. SCORECARD & PDF DOWNLOAD
-    # ==========================================================================
-    else:
-        score = 0
-        total_questions = len(df_test)
-        detailed_report = []
-
-        for display_num, row in df_test.iterrows():
-            sn = display_num + 1
-            user_choice = st.session_state.user_answers.get(display_num)
-            correct_idx = row["correct_index"]
-            correct_ans_text = row["correct_answer_text"]
+    with main_col:
+        if not st.session_state.submitted:
+            curr_idx = st.session_state.current_q_index
+            row = df_test.iloc[curr_idx]
+            
+            # Progress bar
+            st.progress((curr_idx + 1) / total_q)
+            st.caption(f"Question {curr_idx + 1} of {total_q}")
+            
+            st.markdown(f"### Q{curr_idx + 1}. {row['question']}")
+            
             valid_options = [opt for opt in row["options"] if opt]
+            saved_choice = st.session_state.user_answers.get(curr_idx, None)
             
-            is_correct = False
-            user_ans_str = ""
-            if user_choice is not None:
-                selected_opt_text = valid_options[user_choice]
-                user_ans_str = f"{chr(65+user_choice)}. {selected_opt_text}"
-                is_correct = (user_choice == correct_idx) or (selected_opt_text.strip().lower() == correct_ans_text.strip().lower())
+            choice = st.radio(
+                label="Select your answer:",
+                options=range(len(valid_options)),
+                format_func=lambda x: f"{chr(65+x)}. {valid_options[x]}",
+                key=f"q_radio_{curr_idx}",
+                index=saved_choice
+            )
             
-            status_type = "unanswered"
-            if is_correct:
-                score += 1
-                status_type = "correct"
-            elif user_choice is not None:
-                status_type = "incorrect"
+            if choice is not None:
+                st.session_state.user_answers[curr_idx] = choice
 
-            detailed_report.append({
-                "q_num": f"Q{sn}",
-                "question": row["question"],
-                "user_answer": user_ans_str,
-                "correct_answer": correct_ans_text,
-                "status_type": status_type
-            })
-
-        percentage = round((score / total_questions) * 100, 2)
-
-        st.subheader("📊 Final Assessment Scorecard")
-        col1, col2 = st.columns(2)
-        col1.metric(label="Total Score", value=f"{score} / {total_questions}")
-        col2.metric(label="Percentage", value=f"{percentage}%")
-        st.divider()
-
-        st.subheader("📲 Export & Share Results")
-        
-        # WhatsApp Share Link
-        share_text = (
-            f"🎓 *CMA FINAL MCQ Assessment Results*\n"
-            f"👤 *Candidate:* {st.session_state.candidate_name}\n"
-            f"📚 *Subject:* {st.session_state.selected_subject}\n"
-            f"🏆 *Score:* {score}/{total_questions} ({percentage}%)\n"
-            f"✨ Completed via CMA FINAL MCQ App!"
-        )
-        whatsapp_url = f"https://api.whatsapp.com/send?text={urllib.parse.quote(share_text)}"
-        
-        st.markdown(
-            f'<a href="{whatsapp_url}" target="_blank" style="text-decoration:none;">'
-            f'<button style="background-color:#25D366;color:white;border:none;padding:10px 20px;'
-            f'border-radius:5px;font-size:16px;font-weight:bold;cursor:pointer;">'
-            f'📲 Share Score on WhatsApp</button></a>',
-            unsafe_allow_html=True
-        )
-        st.write("")
-
-        # PDF Scorecard Download Button
-        pdf_data = generate_pdf_scorecard(
-            candidate_name=st.session_state.candidate_name,
-            subject_name=st.session_state.selected_subject,
-            score=score,
-            total_questions=total_questions,
-            percentage=percentage,
-            detailed_report=detailed_report
-        )
-
-        st.download_button(
-            label="📄 Download Official PDF Scorecard",
-            data=pdf_data,
-            file_name=f"{st.session_state.candidate_name}_CMA_Scorecard.pdf",
-            mime="application/pdf"
-        )
-
-        st.divider()
-        st.subheader("📝 Question Breakdown & Review")
-        
-        for item in detailed_report:
-            st.markdown(f"**{item['q_num']}: {item['question']}**")
-            
-            if item["status_type"] == "correct":
-                st.success(f"Your Marked Answer: {item['user_answer']} (Correct - 1 Mark)")
-                st.info(f"Correct Answer: {item['correct_answer']}")
-            elif item["status_type"] == "incorrect":
-                st.error(f"Your Marked Answer: {item['user_answer']} (Incorrect - 0 Marks)")
-                st.info(f"Correct Answer: {item['correct_answer']}")
-            else:
-                st.warning(f"Your Marked Answer: Unanswered (0 Marks)")
-                st.info(f"Correct Answer: {item['correct_answer']}")
-            
             st.divider()
             
-        if st.button("🔄 Take Another Test"):
-            st.session_state.test_started = False
-            st.session_state.submitted = False
-            st.session_state.user_answers = {}
-            st.session_state.current_q_index = 0
-            st.rerun()
+            # Action controls
+            col_prev, col_next, col_sub = st.columns([1, 1, 1])
+            
+            with col_prev:
+                if curr_idx > 0:
+                    if st.button("⬅️ Previous"):
+                        st.session_state.current_q_index -= 1
+                        st.rerun()
+                        
+            with col_next:
+                if curr_idx < total_q - 1:
+                    if st.button("Next ➡️", type="primary"):
+                        st.session_state.current_q_index += 1
+                        st.rerun()
+                        
+            with col_sub:
+                if st.button("✅ Submit Assessment", type="primary" if curr_idx == total_q - 1 else "secondary"):
+                    st.session_state.submitted = True
+                    st.rerun()
+
+        # ======================================================================
+        # 6. SCORECARD & PDF DOWNLOAD
+        # ======================================================================
+        else:
+            score = 0
+            total_questions = len(df_test)
+            detailed_report = []
+
+            for display_num, row in df_test.iterrows():
+                sn = display_num + 1
+                user_choice = st.session_state.user_answers.get(display_num)
+                correct_idx = row["correct_index"]
+                correct_ans_text = row["correct_answer_text"]
+                valid_options = [opt for opt in row["options"] if opt]
+                
+                is_correct = False
+                user_ans_str = ""
+                if user_choice is not None:
+                    selected_opt_text = valid_options[user_choice]
+                    user_ans_str = f"{chr(65+user_choice)}. {selected_opt_text}"
+                    is_correct = (user_choice == correct_idx) or (selected_opt_text.strip().lower() == correct_ans_text.strip().lower())
+                
+                status_type = "unanswered"
+                if is_correct:
+                    score += 1
+                    status_type = "correct"
+                elif user_choice is not None:
+                    status_type = "incorrect"
+
+                detailed_report.append({
+                    "q_num": f"Q{sn}",
+                    "question": row["question"],
+                    "user_answer": user_ans_str,
+                    "correct_answer": correct_ans_text,
+                    "status_type": status_type
+                })
+
+            percentage = round((score / total_questions) * 100, 2)
+
+            st.subheader("📊 Final Assessment Scorecard")
+            col1, col2 = st.columns(2)
+            col1.metric(label="Total Score", value=f"{score} / {total_questions}")
+            col2.metric(label="Percentage", value=f"{percentage}%")
+            st.divider()
+
+            st.subheader("📲 Export & Share Results")
+            
+            share_text = (
+                f"🎓 *CMA FINAL MCQ Assessment Results*\n"
+                f"👤 *Candidate:* {st.session_state.candidate_name}\n"
+                f"📚 *Subject:* {st.session_state.selected_subject}\n"
+                f"🏆 *Score:* {score}/{total_questions} ({percentage}%)\n"
+                f"✨ Completed via CMA FINAL MCQ App!"
+            )
+            whatsapp_url = f"https://api.whatsapp.com/send?text={urllib.parse.quote(share_text)}"
+            
+            st.markdown(
+                f'<a href="{whatsapp_url}" target="_blank" style="text-decoration:none;">'
+                f'<button style="background-color:#25D366;color:white;border:none;padding:10px 20px;'
+                f'border-radius:5px;font-size:16px;font-weight:bold;cursor:pointer;">'
+                f'📲 Share Score on WhatsApp</button></a>',
+                unsafe_allow_html=True
+            )
+            st.write("")
+
+            # PDF Download Button
+            pdf_data = generate_pdf_scorecard(
+                candidate_name=st.session_state.candidate_name,
+                subject_name=st.session_state.selected_subject,
+                score=score,
+                total_questions=total_questions,
+                percentage=percentage,
+                detailed_report=detailed_report
+            )
+
+            st.download_button(
+                label="📄 Download Official PDF Scorecard",
+                data=pdf_data,
+                file_name=f"{st.session_state.candidate_name}_CMA_Scorecard.pdf",
+                mime="application/pdf"
+            )
+
+            st.divider()
+            st.subheader("📝 Question Breakdown & Review")
+            
+            for item in detailed_report:
+                st.markdown(f"**{item['q_num']}: {item['question']}**")
+                
+                if item["status_type"] == "correct":
+                    st.success(f"Your Marked Answer: {item['user_answer']} (Correct - 1 Mark)")
+                    st.info(f"Correct Answer: {item['correct_answer']}")
+                elif item["status_type"] == "incorrect":
+                    st.error(f"Your Marked Answer: {item['user_answer']} (Incorrect - 0 Marks)")
+                    st.info(f"Correct Answer: {item['correct_answer']}")
+                else:
+                    st.warning(f"Your Marked Answer: Unanswered (0 Marks)")
+                    st.info(f"Correct Answer: {item['correct_answer']}")
+                
+                st.divider()
+                
+            if st.button("🔄 Take Another Test"):
+                st.session_state.test_started = False
+                st.session_state.submitted = False
+                st.session_state.user_answers = {}
+                st.session_state.current_q_index = 0
+                st.rerun()
