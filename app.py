@@ -42,7 +42,7 @@ def extract_mcqs_from_pdf(pdf_path):
     for q_num, q_data in questions_dict.items():
         ans_text = answers_dict.get(q_num, "").strip()
         
-        # EXCLUDE: If the PDF has no answer for this question, skip it
+        # EXCLUDE: If the source PDF has no answer for this question, skip it
         if not ans_text:
             continue
             
@@ -63,14 +63,14 @@ def extract_mcqs_from_pdf(pdf_path):
     return pd.DataFrame(mcq_list)
 
 # ==============================================================================
-# 2. PDF SCORECARD GENERATOR (FPDF2)
+# 2. PDF SCORECARD GENERATOR WITH DETAILED QUESTION REVIEW (FPDF2)
 # ==============================================================================
 class ScorecardPDF(FPDF):
     def header(self):
-        self.set_font("Helvetica", "B", 16)
+        self.set_font("Helvetica", "B", 14)
         self.set_text_color(30, 58, 138)
         self.cell(0, 10, "CMA FINAL MCQ ASSESSMENT REPORT CARD", ln=True, align="C")
-        self.ln(5)
+        self.ln(2)
 
 def generate_pdf_scorecard(candidate_name, subject_name, score, total_questions, percentage, detailed_report):
     pdf = ScorecardPDF()
@@ -78,7 +78,7 @@ def generate_pdf_scorecard(candidate_name, subject_name, score, total_questions,
     pdf.set_auto_page_break(auto=True, margin=15)
 
     # Candidate Summary Block
-    pdf.set_font("Helvetica", "B", 11)
+    pdf.set_font("Helvetica", "B", 10)
     pdf.set_fill_color(243, 244, 246)
     pdf.set_draw_color(209, 213, 219)
     
@@ -90,31 +90,47 @@ def generate_pdf_scorecard(candidate_name, subject_name, score, total_questions,
     ]
     
     for label, val in meta_info:
-        pdf.cell(50, 8, f"  {label}", border=1, fill=True)
-        pdf.set_font("Helvetica", "", 11)
-        pdf.cell(130, 8, f"  {val}", border=1, ln=True)
-        pdf.set_font("Helvetica", "B", 11)
+        pdf.cell(45, 7, f"  {label}", border=1, fill=True)
+        pdf.set_font("Helvetica", "", 10)
+        pdf.cell(135, 7, f"  {val}", border=1, ln=True)
+        pdf.set_font("Helvetica", "B", 10)
         
-    pdf.ln(10)
+    pdf.ln(6)
 
-    # Question Breakdown Table Header
+    # Detailed Question Review Header
     pdf.set_font("Helvetica", "B", 12)
-    pdf.set_text_color(0, 0, 0)
-    pdf.cell(0, 8, "Question Performance Breakdown", ln=True)
-    pdf.ln(2)
+    pdf.set_text_color(30, 58, 138)
+    pdf.cell(0, 8, "Detailed Assessment Breakdown", ln=True)
+    pdf.set_draw_color(30, 58, 138)
+    pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+    pdf.ln(4)
 
-    pdf.set_font("Helvetica", "B", 10)
-    pdf.set_fill_color(30, 58, 138)
-    pdf.set_text_color(255, 255, 255)
-    pdf.cell(30, 8, "  Q.No", border=1, fill=True)
-    pdf.cell(150, 8, "  Status", border=1, fill=True, ln=True)
-
-    # Rows
-    pdf.set_font("Helvetica", "", 10)
-    pdf.set_text_color(0, 0, 0)
+    # Render each question detail into the PDF
     for item in detailed_report:
-        pdf.cell(30, 7, f"  {item['q_num']}", border=1)
-        pdf.cell(150, 7, f"  {item['status']}", border=1, ln=True)
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.set_text_color(0, 0, 0)
+        
+        # Question Title
+        pdf.multi_cell(0, 5, f"{item['q_num']}. {item['question']}")
+        pdf.ln(1)
+        
+        # User Selected Answer
+        pdf.set_font("Helvetica", "", 9)
+        if item["status_type"] == "correct":
+            pdf.set_text_color(16, 185, 129)  # Green
+            pdf.cell(0, 5, f"   Your Answer: {item['user_answer']} (Correct - 1 Mark)", ln=True)
+        elif item["status_type"] == "incorrect":
+            pdf.set_text_color(239, 68, 68)   # Red
+            pdf.cell(0, 5, f"   Your Answer: {item['user_answer']} (Incorrect - 0 Marks)", ln=True)
+            pdf.set_text_color(30, 58, 138)  # Blue
+            pdf.cell(0, 5, f"   Correct Answer: {item['correct_answer']}", ln=True)
+        else:
+            pdf.set_text_color(217, 119, 6)   # Amber
+            pdf.cell(0, 5, f"   Your Answer: Unanswered (0 Marks)", ln=True)
+            pdf.set_text_color(30, 58, 138)  # Blue
+            pdf.cell(0, 5, f"   Correct Answer: {item['correct_answer']}", ln=True)
+            
+        pdf.ln(3)
 
     return bytes(pdf.output())
 
@@ -244,17 +260,26 @@ else:
             valid_options = [opt for opt in row["options"] if opt]
             
             is_correct = False
+            user_ans_str = ""
             if user_choice is not None:
                 selected_opt_text = valid_options[user_choice]
+                user_ans_str = f"{chr(65+user_choice)}. {selected_opt_text}"
                 is_correct = (user_choice == correct_idx) or (selected_opt_text.strip().lower() == correct_ans_text.strip().lower())
             
+            status_type = "unanswered"
             if is_correct:
                 score += 1
-                detailed_report.append({"q_num": f"Q{sn}", "status": "Correct (1 Mark)"})
+                status_type = "correct"
             elif user_choice is not None:
-                detailed_report.append({"q_num": f"Q{sn}", "status": "Incorrect (0 Marks)"})
-            else:
-                detailed_report.append({"q_num": f"Q{sn}", "status": "Unanswered (0 Marks)"})
+                status_type = "incorrect"
+
+            detailed_report.append({
+                "q_num": f"Q{sn}",
+                "question": row["question"],
+                "user_answer": user_ans_str,
+                "correct_answer": correct_ans_text,
+                "status_type": status_type
+            })
 
         percentage = round((score / total_questions) * 100, 2)
 
@@ -305,27 +330,16 @@ else:
         st.divider()
         st.subheader("📝 Question Breakdown & Review")
         
-        for display_num, row in df_test.iterrows():
-            sn = display_num + 1
-            user_choice = st.session_state.user_answers.get(display_num)
-            correct_idx = row["correct_index"]
-            correct_ans_text = row["correct_answer_text"]
-            valid_options = [opt for opt in row["options"] if opt]
+        for item in detailed_report:
+            st.markdown(f"**{item['q_num']}: {item['question']}**")
             
-            st.markdown(f"**Q{sn}: {row['question']}**")
-            
-            is_correct = False
-            if user_choice is not None:
-                selected_opt_text = valid_options[user_choice]
-                is_correct = (user_choice == correct_idx) or (selected_opt_text.strip().lower() == correct_ans_text.strip().lower())
-            
-            if is_correct:
-                st.success(f"Your answer: {chr(65+user_choice)}. {valid_options[user_choice]} (Correct - 1 Mark)")
-            elif user_choice is not None:
-                st.error(f"Your answer: {chr(65+user_choice)}. {valid_options[user_choice]} (Incorrect - 0 Marks)")
-                st.info(f"Correct Answer: {correct_ans_text}")
+            if item["status_type"] == "correct":
+                st.success(f"Your answer: {item['user_answer']} (Correct - 1 Mark)")
+            elif item["status_type"] == "incorrect":
+                st.error(f"Your answer: {item['user_answer']} (Incorrect - 0 Marks)")
+                st.info(f"Correct Answer: {item['correct_answer']}")
             else:
-                st.warning(f"Unanswered (0 Marks). Correct Answer: {correct_ans_text}")
+                st.warning(f"Unanswered (0 Marks). Correct Answer: {item['correct_answer']}")
             
             st.divider()
             
