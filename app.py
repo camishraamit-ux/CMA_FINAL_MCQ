@@ -4,7 +4,7 @@ import pandas as pd
 import streamlit as st
 
 # ==============================================================================
-# 1. PDF EXTRACTION LOGIC (Supports multiple subject files)
+# 1. PDF EXTRACTION LOGIC
 # ==============================================================================
 @st.cache_data
 def extract_mcqs_from_pdf(pdf_path):
@@ -60,17 +60,15 @@ def extract_mcqs_from_pdf(pdf_path):
 # ==============================================================================
 st.set_page_config(page_title="CMA Final Assessment", layout="centered")
 
-# Map your 8 subject names to their respective PDF filenames
-# (Ensure your 8 PDF files are uploaded to your GitHub repository)
+# Exact mapping matching your PDF filenames
 SUBJECT_FILES = {
-    "Financial Analysis": "Financial_Analysis.pdf",
-    "Strategic Financial Management": "Strategic_Financial_Management.pdf",
-    "Strategic Cost Management": "Strategic_Cost_Management.pdf",
-    "Direct and Indirect Tax Laws": "Direct_and_Indirect_Tax_Laws.pdf",
-    "Corporate Laws and Compliance": "Corporate_Laws_and_Compliance.pdf",
-    "Business Strategy and Strategic Management": "Business_Strategy.pdf",
-    "Corporate Financial Reporting": "Corporate_Financial_Reporting.pdf",
-    "Business Valuation and Management": "Business_Valuation.pdf"
+    "Corporate and Economic Laws": "13. CORPORATE AND ECONOMIC LAWS.pdf",
+    "Strategic Financial Management": "14. STRATEGIC FINANCIAL MANAGEMENT.pdf",
+    "Direct Tax Laws and International Taxation": "15. DIRECT TAX LAWS AND INTERNATIONAL TAXATION.pdf",
+    "Strategic Cost Management": "16. STRATEGIC COST MANAGEMENT.pdf",
+    "Cost and Management Audit": "17. COST AND MANAGEMENT AUDIT.pdf",
+    "Corporate Financial Reporting": "18. CORPORATE FINANCIAL REPORTING.pdf",
+    "Strategic Performance Management & Business Valuation": "20A. STRATEGIC PERFORMANCE MANAGEMENT & BUSINESS VALUATION.pdf"
 }
 
 # Session State Initializations
@@ -92,7 +90,7 @@ if "submitted" not in st.session_state:
 # ==============================================================================
 if not st.session_state.test_started:
     st.title("🎯 CMA Final Assessment Portal")
-    st.write("Please enter your details and choose a subject to begin your 25-question randomized assessment.")
+    st.write("Enter your details and choose your CMA Final subject to begin your 25-question randomized assessment.")
     
     with st.form("setup_form"):
         name_input = st.text_input("Enter Your Full Name:", value=st.session_state.candidate_name)
@@ -107,12 +105,11 @@ if not st.session_state.test_started:
                 st.session_state.candidate_name = name_input.strip()
                 st.session_state.selected_subject = subject_choice
                 
-                # Load PDF and sample 25 questions randomly
                 pdf_filename = SUBJECT_FILES[subject_choice]
                 try:
                     df_all = extract_mcqs_from_pdf(pdf_filename)
                     if len(df_all) < 25:
-                        st.warning(f"Note: This file only contains {len(df_all)} questions. All will be used.")
+                        st.warning(f"Note: This file contains {len(df_all)} questions. All available questions will be used.")
                         st.session_state.assessment_df = df_all.sample(frac=1).reset_index(drop=True)
                     else:
                         st.session_state.assessment_df = df_all.sample(n=25).reset_index(drop=True)
@@ -122,13 +119,12 @@ if not st.session_state.test_started:
                     st.session_state.test_started = True
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Could not load '{pdf_filename}'. Make sure the file is uploaded to your repository. Error: {e}")
+                    st.error(f"Could not load '{pdf_filename}'. Ensure this file is uploaded to GitHub with the exact name. Error: {e}")
 
 # ==============================================================================
-# 4. ASSESSMENT SCREEN (25 Random Questions, Sn 1 to 25)
+# 4. ASSESSMENT SCREEN (Dynamic Heading & 25 Questions)
 # ==============================================================================
 else:
-    # Dynamic Heading Requirement
     st.title(f"CMA Final - {st.session_state.selected_subject}")
     st.markdown(f"**Candidate Name:** {st.session_state.candidate_name}")
     st.divider()
@@ -138,12 +134,11 @@ else:
     if not st.session_state.submitted:
         with st.form("quiz_form"):
             for display_num, row in df_test.iterrows():
-                sn = display_num + 1  # Serial number from 1 to 25
+                sn = display_num + 1
                 st.markdown(f"### Q{sn}. {row['question']}")
                 
                 valid_options = [opt for opt in row["options"] if opt]
                 
-                # Render options using radio buttons
                 choice = st.radio(
                     label=f"Select answer for Q{sn}",
                     options=range(len(valid_options)),
