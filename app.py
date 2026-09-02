@@ -10,7 +10,7 @@ from fpdf import FPDF
 # ==============================================================================
 # 1. STREAMLIT CONFIGURATION & CUSTOM MOBILE STYLING
 # ==============================================================================
-st.set_page_config(page_title="CMA FINAL MCQ Assessment Portal", layout="centered", page_icon="🎯")
+st.set_page_config(page_title="CMA Final MCQ Assessment App", layout="centered", page_icon="🎯")
 
 st.markdown("""
     <style>
@@ -22,6 +22,37 @@ st.markdown("""
         padding-top: 0.6rem !important;
         padding-bottom: 2rem !important;
         max-width: 720px !important;
+    }
+
+    /* ---------- Registration Hero (fills the screen) ---------- */
+    .reg-hero {
+        min-height: 60vh;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        background: linear-gradient(160deg, #1e3a8a 0%, #2563eb 60%, #3b82f6 100%);
+        border-radius: 22px;
+        padding: 40px 24px;
+        margin-bottom: 22px;
+        box-shadow: 0px 10px 24px rgba(30, 58, 138, 0.25);
+    }
+    .reg-hero .reg-icon { font-size: 56px; margin-bottom: 10px; }
+    .reg-hero h1 {
+        color: #ffffff !important;
+        font-size: 34px !important;
+        font-weight: 900 !important;
+        line-height: 1.25 !important;
+        margin: 0 0 14px 0 !important;
+    }
+    .reg-hero p {
+        color: #dbeafe !important;
+        font-size: 18px !important;
+        font-weight: 500 !important;
+        max-width: 340px;
+        margin: 0 auto !important;
     }
 
     /* ---------- Top Info Bar ---------- */
@@ -109,8 +140,8 @@ st.markdown("""
     }
     div[data-testid="stRadio"] label {
         width: 100% !important;
-        min-height: 70px !important;
-        font-size: 22px !important;
+        min-height: 78px !important;
+        font-size: 28px !important;
         font-weight: 700 !important;
         color: #0f172a !important;
         padding: 18px 22px !important;
@@ -141,6 +172,11 @@ st.markdown("""
         transform: scale(2) !important;
         margin-right: 20px !important;
         accent-color: #1e3a8a !important;
+    }
+    div[data-testid="stRadio"] label p {
+        font-size: 28px !important;
+        font-weight: 700 !important;
+        margin: 0 !important;
     }
 
     /* ---------- Nav Buttons ---------- */
@@ -364,8 +400,16 @@ for key, default in [
 # 5. REGISTRATION SCREEN
 # ==============================================================================
 if not st.session_state.test_started:
-    st.markdown('<h1 style="color:#1e3a8a; font-size:30px; font-weight:900;">🎯 CMA FINAL MCQ Assessment Portal</h1>', unsafe_allow_html=True)
-    st.write("Configure your assessment settings below to get started.")
+    st.markdown(
+        '''
+        <div class="reg-hero">
+            <div class="reg-icon">🎯</div>
+            <h1>CMA Final MCQ Assessment App</h1>
+            <p>Configure your assessment settings below to get started.</p>
+        </div>
+        ''',
+        unsafe_allow_html=True
+    )
 
     with st.form("setup_form"):
         name_input = st.text_input("Enter Your Full Name:", value=st.session_state.candidate_name)
