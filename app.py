@@ -63,7 +63,7 @@ def extract_mcqs_from_pdf(pdf_path):
     return pd.DataFrame(mcq_list)
 
 # ==============================================================================
-# 2. PDF SCORECARD GENERATOR WITH DETAILED QUESTION REVIEW (FPDF2)
+# 2. PDF SCORECARD GENERATOR WITH COMPLETE QUESTION & ANSWER DETAILS (FPDF2)
 # ==============================================================================
 class ScorecardPDF(FPDF):
     def header(self):
@@ -97,7 +97,7 @@ def generate_pdf_scorecard(candidate_name, subject_name, score, total_questions,
         
     pdf.ln(6)
 
-    # Detailed Question Review Header
+    # Detailed Review Header
     pdf.set_font("Helvetica", "B", 12)
     pdf.set_text_color(30, 58, 138)
     pdf.cell(0, 8, "Detailed Assessment Breakdown", ln=True)
@@ -105,28 +105,30 @@ def generate_pdf_scorecard(candidate_name, subject_name, score, total_questions,
     pdf.line(10, pdf.get_y(), 200, pdf.get_y())
     pdf.ln(4)
 
-    # Render each question detail into the PDF
+    # Question Breakdown inside PDF
     for item in detailed_report:
         pdf.set_font("Helvetica", "B", 10)
         pdf.set_text_color(0, 0, 0)
         
-        # Question Title
+        # Question Statement
         pdf.multi_cell(0, 5, f"{item['q_num']}. {item['question']}")
         pdf.ln(1)
         
-        # User Selected Answer
+        # Marked & Correct Answer Details
         pdf.set_font("Helvetica", "", 9)
         if item["status_type"] == "correct":
             pdf.set_text_color(16, 185, 129)  # Green
-            pdf.cell(0, 5, f"   Your Answer: {item['user_answer']} (Correct - 1 Mark)", ln=True)
+            pdf.cell(0, 5, f"   Marked Answer : {item['user_answer']} (Correct - 1 Mark)", ln=True)
+            pdf.set_text_color(30, 58, 138)  # Blue
+            pdf.cell(0, 5, f"   Correct Answer: {item['correct_answer']}", ln=True)
         elif item["status_type"] == "incorrect":
             pdf.set_text_color(239, 68, 68)   # Red
-            pdf.cell(0, 5, f"   Your Answer: {item['user_answer']} (Incorrect - 0 Marks)", ln=True)
+            pdf.cell(0, 5, f"   Marked Answer : {item['user_answer']} (Incorrect - 0 Marks)", ln=True)
             pdf.set_text_color(30, 58, 138)  # Blue
             pdf.cell(0, 5, f"   Correct Answer: {item['correct_answer']}", ln=True)
         else:
             pdf.set_text_color(217, 119, 6)   # Amber
-            pdf.cell(0, 5, f"   Your Answer: Unanswered (0 Marks)", ln=True)
+            pdf.cell(0, 5, f"   Marked Answer : Unanswered (0 Marks)", ln=True)
             pdf.set_text_color(30, 58, 138)  # Blue
             pdf.cell(0, 5, f"   Correct Answer: {item['correct_answer']}", ln=True)
             
@@ -161,6 +163,8 @@ if "user_answers" not in st.session_state:
     st.session_state.user_answers = {}
 if "submitted" not in st.session_state:
     st.session_state.submitted = False
+if "current_q_index" not in st.session_state:
+    st.session_state.current_q_index = 0
 
 # ==============================================================================
 # 4. REGISTRATION & CONFIGURATION SCREEN
@@ -203,13 +207,14 @@ if not st.session_state.test_started:
                         st.session_state.assessment_df = df_all.sample(n=num_to_sample).reset_index(drop=True)
                         st.session_state.user_answers = {}
                         st.session_state.submitted = False
+                        st.session_state.current_q_index = 0
                         st.session_state.test_started = True
                         st.rerun()
                 except Exception as e:
                     st.error(f"Could not load '{pdf_filename}'. Ensure this file is uploaded to GitHub. Error: {e}")
 
 # ==============================================================================
-# 5. ASSESSMENT SCREEN
+# 5. ASSESSMENT SCREEN (ONE QUESTION AT A TIME)
 # ==============================================================================
 else:
     st.title(f"CMA Final - {st.session_state.selected_subject}")
@@ -217,33 +222,56 @@ else:
     st.divider()
 
     df_test = st.session_state.assessment_df
+    total_q = len(df_test)
 
     if not st.session_state.submitted:
-        with st.form("quiz_form"):
-            for display_num, row in df_test.iterrows():
-                sn = display_num + 1
-                st.markdown(f"### Q{sn}. {row['question']}")
-                
-                valid_options = [opt for opt in row["options"] if opt]
-                
-                choice = st.radio(
-                    label=f"Select answer for Q{sn}",
-                    options=range(len(valid_options)),
-                    format_func=lambda x: f"{chr(65+x)}. {valid_options[x]}",
-                    key=f"q_{display_num}",
-                    index=None
-                )
-                
-                if choice is not None:
-                    st.session_state.user_answers[display_num] = choice
-                
-                st.write("")
-            
-            submit_assessment = st.form_submit_button("Submit Assessment", type="primary")
-            if submit_assessment:
+        curr_idx = st.session_state.current_q_index
+        row = df_test.iloc[curr_idx]
+        
+        # Progress indicator
+        st.progress((curr_idx + 1) / total_q)
+        st.caption(f"Question {curr_idx + 1} of {total_q}")
+        
+        st.markdown(f"### Q{curr_idx + 1}. {row['question']}")
+        
+        valid_options = [opt for opt in row["options"] if opt]
+        
+        # Pre-select previously chosen answer if exists
+        saved_choice = st.session_state.user_answers.get(curr_idx, None)
+        
+        choice = st.radio(
+            label="Select your answer:",
+            options=range(len(valid_options)),
+            format_func=lambda x: f"{chr(65+x)}. {valid_options[x]}",
+            key=f"q_radio_{curr_idx}",
+            index=saved_choice
+        )
+        
+        if choice is not None:
+            st.session_state.user_answers[curr_idx] = choice
+
+        st.divider()
+        
+        # Navigation Buttons
+        col_prev, col_next, col_sub = st.columns([1, 1, 1])
+        
+        with col_prev:
+            if curr_idx > 0:
+                if st.button("⬅️ Previous"):
+                    st.session_state.current_q_index -= 1
+                    st.rerun()
+                    
+        with col_next:
+            if curr_idx < total_q - 1:
+                if st.button("Next ➡️", type="primary"):
+                    st.session_state.current_q_index += 1
+                    st.rerun()
+                    
+        with col_sub:
+            if st.button("✅ Submit Assessment", type="primary" if curr_idx == total_q - 1 else "secondary"):
                 st.session_state.submitted = True
                 st.rerun()
-                
+
     # ==========================================================================
     # 6. SCORECARD & PDF DOWNLOAD
     # ==========================================================================
@@ -334,12 +362,14 @@ else:
             st.markdown(f"**{item['q_num']}: {item['question']}**")
             
             if item["status_type"] == "correct":
-                st.success(f"Your answer: {item['user_answer']} (Correct - 1 Mark)")
+                st.success(f"Your Marked Answer: {item['user_answer']} (Correct - 1 Mark)")
+                st.info(f"Correct Answer: {item['correct_answer']}")
             elif item["status_type"] == "incorrect":
-                st.error(f"Your answer: {item['user_answer']} (Incorrect - 0 Marks)")
+                st.error(f"Your Marked Answer: {item['user_answer']} (Incorrect - 0 Marks)")
                 st.info(f"Correct Answer: {item['correct_answer']}")
             else:
-                st.warning(f"Unanswered (0 Marks). Correct Answer: {item['correct_answer']}")
+                st.warning(f"Your Marked Answer: Unanswered (0 Marks)")
+                st.info(f"Correct Answer: {item['correct_answer']}")
             
             st.divider()
             
@@ -347,4 +377,5 @@ else:
             st.session_state.test_started = False
             st.session_state.submitted = False
             st.session_state.user_answers = {}
+            st.session_state.current_q_index = 0
             st.rerun()
