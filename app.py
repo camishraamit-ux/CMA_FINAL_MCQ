@@ -2,6 +2,7 @@ import random
 import pdfplumber
 import pandas as pd
 import streamlit as st
+import urllib.parse
 
 # ==============================================================================
 # 1. PDF EXTRACTION LOGIC
@@ -60,7 +61,6 @@ def extract_mcqs_from_pdf(pdf_path):
 # ==============================================================================
 st.set_page_config(page_title="CMA Final Assessment", layout="centered")
 
-# Exact mapping matching your PDF filenames
 SUBJECT_FILES = {
     "Corporate and Economic Laws": "13. CORPORATE AND ECONOMIC LAWS.pdf",
     "Strategic Financial Management": "14. STRATEGIC FINANCIAL MANAGEMENT.pdf",
@@ -119,7 +119,7 @@ if not st.session_state.test_started:
                     st.session_state.test_started = True
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Could not load '{pdf_filename}'. Ensure this file is uploaded to GitHub with the exact name. Error: {e}")
+                    st.error(f"Could not load '{pdf_filename}'. Ensure this file is uploaded to GitHub. Error: {e}")
 
 # ==============================================================================
 # 4. ASSESSMENT SCREEN (Dynamic Heading & 25 Questions)
@@ -158,13 +158,83 @@ else:
                 st.rerun()
                 
     # ==========================================================================
-    # 5. SCORECARD & RESULTS
+    # 5. SCORECARD & SHAREABLE RESULTS
     # ==========================================================================
     else:
         score = 0
         total_questions = len(df_test)
+        detailed_report = []
+
+        for display_num, row in df_test.iterrows():
+            sn = display_num + 1
+            user_choice = st.session_state.user_answers.get(display_num)
+            correct_idx = row["correct_index"]
+            correct_ans_text = row["correct_answer_text"]
+            valid_options = [opt for opt in row["options"] if opt]
+            
+            is_correct = False
+            if user_choice is not None:
+                selected_opt_text = valid_options[user_choice]
+                is_correct = (user_choice == correct_idx) or (selected_opt_text.strip().lower() == correct_ans_text.strip().lower())
+            
+            if is_correct:
+                score += 1
+                detailed_report.append(f"Q{sn}: Correct (1 Mark)")
+            elif user_choice is not None:
+                detailed_report.append(f"Q{sn}: Incorrect (0 Marks)")
+            else:
+                detailed_report.append(f"Q{sn}: Unanswered (0 Marks)")
+
+        percentage = round((score / total_questions) * 100, 2)
+
+        # High-level metric display
+        st.subheader("📊 Final Assessment Scorecard")
+        col1, col2 = st.columns(2)
+        col1.metric(label="Total Score", value=f"{score} / {total_questions}")
+        col2.metric(label="Percentage", value=f"{percentage}%")
+        st.divider()
+
+        # Share buttons section
+        st.subheader("📲 Share Your Results")
         
-        st.subheader("📊 Assessment Results Summary")
+        # WhatsApp Share Link
+        share_text = (
+            f"🎓 *CMA Final Assessment Results*\n"
+            f"👤 *Candidate:* {st.session_state.candidate_name}\n"
+            f"📚 *Subject:* {st.session_state.selected_subject}\n"
+            f"🏆 *Score:* {score}/{total_questions} ({percentage}%)\n"
+            f"✨ Completed via CMA Final MCQ App!"
+        )
+        whatsapp_url = f"https://api.whatsapp.com/send?text={urllib.parse.quote(share_text)}"
+        
+        st.markdown(
+            f'<a href="{whatsapp_url}" target="_blank" style="text-decoration:none;">'
+            f'<button style="background-color:#25D366;color:white;border:none;padding:10px 20px;'
+            f'border-radius:5px;font-size:16px;font-weight:bold;cursor:pointer;">'
+            f'📲 Share Score on WhatsApp</button></a>',
+            unsafe_allow_html=True
+        )
+        st.write("")
+
+        # Downloadable Text Scorecard
+        scorecard_txt = f"CMA FINAL ASSESSMENT RESULT\n" \
+                        f"===========================\n" \
+                        f"Candidate Name : {st.session_state.candidate_name}\n" \
+                        f"Subject        : {st.session_state.selected_subject}\n" \
+                        f"Final Score    : {score} / {total_questions}\n" \
+                        f"Percentage     : {percentage}%\n" \
+                        f"===========================\n\n" \
+                        f"Question Breakdown:\n" + "\n".join(detailed_report)
+
+        st.download_button(
+            label="📥 Download Detailed Scorecard (.txt)",
+            data=scorecard_txt,
+            file_name=f"{st.session_state.candidate_name}_CMA_Result.txt",
+            mime="text/plain"
+        )
+
+        st.divider()
+        st.subheader("📝 Question Breakdown & Review")
         
         for display_num, row in df_test.iterrows():
             sn = display_num + 1
@@ -181,7 +251,6 @@ else:
                 is_correct = (user_choice == correct_idx) or (selected_opt_text.strip().lower() == correct_ans_text.strip().lower())
             
             if is_correct:
-                score += 1
                 st.success(f"Your answer: {chr(65+user_choice)}. {valid_options[user_choice]} (Correct - 1 Mark)")
             elif user_choice is not None:
                 st.error(f"Your answer: {chr(65+user_choice)}. {valid_options[user_choice]} (Incorrect - 0 Marks)")
@@ -191,9 +260,7 @@ else:
             
             st.divider()
             
-        st.metric(label="Final Score (Marks)", value=f"{score} / {total_questions}")
-        
-        if st.button("🔄 Take Another Test / Retake"):
+        if st.button("🔄 Take Another Test"):
             st.session_state.test_started = False
             st.session_state.submitted = False
             st.session_state.user_answers = {}
